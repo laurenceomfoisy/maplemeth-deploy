@@ -1,0 +1,5346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>
+      Can LLMs predict individual vote choice? Yes, but a multinomial regression
+      does it better - Foisy &amp; Dufresne · MapleMeth 2026
+    </title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg: #f5f4f0;
+        --bg2: #eeecea;
+        --ink: #0d0d0f;
+        --ink2: #3a3a42;
+        --ink3: #6b6b78;
+        --rule: #d4d2cc;
+        --rule2: #e8e6e0;
+        --sky: #0077b6;
+        --sky-light: #e8f4f8;
+        --amber: #b45309;
+        --amber-light: #fdf3e3;
+        --violet: #5b21b6;
+        --violet-light: #ede9f8;
+        --rose: #9f1239;
+        --rose-light: #fde8ee;
+        --green: #166534;
+        --green-light: #e8f5ee;
+        --lpc: #c0392b;
+        --cpc: #1a56db;
+        --ndp: #c2540a;
+        --bq: #0891b2;
+        --gpc: #15803d;
+        --radius: 4px;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.05);
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+      }
+      html {
+        zoom: 1.5; /* default authoring zoom; press Z to cycle 1.0 / 1.3 / 1.5 */
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Source Sans 3", sans-serif;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(var(--rule2) 1px, transparent 1px),
+          linear-gradient(90deg, var(--rule2) 1px, transparent 1px);
+        background-size: 48px 48px;
+        opacity: 0.55;
+      }
+      #topbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 2px;
+        width: 0%;
+        background: linear-gradient(90deg, var(--violet), var(--sky));
+        z-index: 100;
+        transition: width 0.4s ease;
+      }
+      #deck {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+      }
+      .slide {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 52px 72px;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.45s ease,
+          transform 0.45s ease;
+        transform: translateY(10px);
+      }
+      .slide.active {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+      .slide.out {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      .card {
+        background: #fff;
+        border: 1px solid var(--rule);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+      }
+      .card-sky {
+        background: var(--sky-light);
+        border: 1px solid rgba(0, 119, 182, 0.18);
+        border-radius: var(--radius);
+      }
+      .card-amber {
+        background: var(--amber-light);
+        border: 1px solid rgba(180, 83, 9, 0.18);
+        border-radius: var(--radius);
+      }
+      .card-violet {
+        background: var(--violet-light);
+        border: 1px solid rgba(91, 33, 182, 0.18);
+        border-radius: var(--radius);
+      }
+      .card-rose {
+        background: var(--rose-light);
+        border: 1px solid rgba(159, 18, 57, 0.18);
+        border-radius: var(--radius);
+      }
+      .card-green {
+        background: var(--green-light);
+        border: 1px solid rgba(21, 128, 61, 0.18);
+        border-radius: var(--radius);
+      }
+      .card-ink {
+        background: var(--ink);
+        color: #f5f4f0;
+        border-radius: var(--radius);
+      }
+      h1 {
+        font-family: "Source Sans 3", sans-serif;
+        font-size: clamp(2rem, 4vw, 3.2rem);
+        font-weight: 800;
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+        color: var(--ink);
+      }
+      h2 {
+        font-family: "Source Sans 3", sans-serif;
+        font-size: clamp(1.3rem, 2.5vw, 2rem);
+        font-weight: 700;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        color: var(--ink);
+      }
+      h3 {
+        font-family: "Source Sans 3", sans-serif;
+        font-size: clamp(0.9rem, 1.4vw, 1.15rem);
+        font-weight: 700;
+        color: var(--ink);
+      }
+      p,
+      li {
+        font-size: clamp(0.82rem, 1.1vw, 0.96rem);
+        line-height: 1.65;
+        color: var(--ink2);
+      }
+      .mono {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.82rem;
+      }
+      .small {
+        font-size: 0.78rem;
+        color: var(--ink3);
+        line-height: 1.5;
+      }
+      .label {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink3);
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 2px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.68rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .tag::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .tag-sky {
+        background: var(--sky-light);
+        color: var(--sky);
+        border: 1px solid rgba(0, 119, 182, 0.2);
+      }
+      .tag-sky::before {
+        background: var(--sky);
+      }
+      .tag-amber {
+        background: var(--amber-light);
+        color: var(--amber);
+        border: 1px solid rgba(180, 83, 9, 0.2);
+      }
+      .tag-amber::before {
+        background: var(--amber);
+      }
+      .tag-violet {
+        background: var(--violet-light);
+        color: var(--violet);
+        border: 1px solid rgba(91, 33, 182, 0.2);
+      }
+      .tag-violet::before {
+        background: var(--violet);
+      }
+      .tag-rose {
+        background: var(--rose-light);
+        color: var(--rose);
+        border: 1px solid rgba(159, 18, 57, 0.2);
+      }
+      .tag-rose::before {
+        background: var(--rose);
+      }
+      .tag-green {
+        background: var(--green-light);
+        color: var(--green);
+        border: 1px solid rgba(21, 128, 61, 0.2);
+      }
+      .tag-green::before {
+        background: var(--green);
+      }
+      .tag-ink {
+        background: var(--ink);
+        color: #f5f4f0;
+      }
+      .tag-ink::before {
+        background: #f5f4f0;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 2px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+      }
+      .pill-lpc {
+        background: rgba(192, 57, 43, 0.1);
+        color: var(--lpc);
+        border: 1px solid rgba(192, 57, 43, 0.25);
+      }
+      .pill-cpc {
+        background: rgba(26, 86, 219, 0.1);
+        color: var(--cpc);
+        border: 1px solid rgba(26, 86, 219, 0.25);
+      }
+      .pill-ndp {
+        background: rgba(194, 84, 10, 0.1);
+        color: var(--ndp);
+        border: 1px solid rgba(194, 84, 10, 0.25);
+      }
+      .pill-bq {
+        background: rgba(8, 145, 178, 0.1);
+        color: var(--bq);
+        border: 1px solid rgba(8, 145, 178, 0.25);
+      }
+      .pill-gpc {
+        background: rgba(21, 128, 61, 0.1);
+        color: var(--gpc);
+        border: 1px solid rgba(21, 128, 61, 0.25);
+      }
+      .rule {
+        width: 100%;
+        height: 1px;
+        background: var(--rule);
+        margin: 12px 0;
+      }
+      .rule-short {
+        width: 40px;
+        height: 2px;
+        background: var(--violet);
+        border-radius: 1px;
+        margin: 10px 0;
+      }
+      .e {
+        opacity: 0;
+        transform: translateY(14px);
+        transition:
+          opacity 0.4s ease,
+          transform 0.4s ease;
+      }
+      .slide.active .e:nth-child(1) {
+        opacity: 1;
+        transform: none;
+        transition-delay: 0.06s;
+      }
+      .slide.active .e:nth-child(2) {
+        opacity: 1;
+        transform: none;
+        transition-delay: 0.14s;
+      }
+      .slide.active .e:nth-child(3) {
+        opacity: 1;
+        transform: none;
+        transition-delay: 0.22s;
+      }
+      .slide.active .e:nth-child(4) {
+        opacity: 1;
+        transform: none;
+        transition-delay: 0.3s;
+      }
+      .slide.active .e:nth-child(5) {
+        opacity: 1;
+        transform: none;
+        transition-delay: 0.38s;
+      }
+      .slide.active .e:nth-child(6) {
+        opacity: 1;
+        transform: none;
+        transition-delay: 0.46s;
+      }
+      .slide.active .e:nth-child(7) {
+        opacity: 1;
+        transform: none;
+        transition-delay: 0.54s;
+      }
+      .slide.active .e:nth-child(8) {
+        opacity: 1;
+        transform: none;
+        transition-delay: 0.62s;
+      }
+      .fig-frame {
+        clip-path: inset(0 0 100% 0);
+        transition: clip-path 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.25s;
+        border-radius: var(--radius);
+        overflow: hidden;
+        border: 1px solid var(--rule);
+        background: #fff;
+      }
+      .slide.active .fig-frame {
+        clip-path: inset(0 0 0% 0);
+      }
+      .fig-frame img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+      .stat-num {
+        font-family: "Source Sans 3", sans-serif;
+        font-size: clamp(2rem, 4.5vw, 3.4rem);
+        font-weight: 800;
+        line-height: 1;
+        color: var(--ink);
+      }
+      .stat-lbl {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink3);
+        margin-top: 4px;
+      }
+      .pbar-wrap {
+        height: 5px;
+        background: var(--rule2);
+        border-radius: 999px;
+        overflow: hidden;
+        margin-top: 5px;
+      }
+      .pbar {
+        height: 100%;
+        border-radius: 999px;
+        width: 0%;
+        transition: width 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.35s;
+      }
+      .slide.active .pbar {
+        width: var(--w);
+      }
+      #nav {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 200;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--rule);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 1px solid var(--rule);
+      }
+      .dot.on {
+        width: 20px;
+        background: var(--violet);
+        border-color: var(--violet);
+      }
+      #slidenum {
+        position: fixed;
+        bottom: 24px;
+        right: 36px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        color: var(--ink3);
+        z-index: 200;
+      }
+      #arrows {
+        position: fixed;
+        bottom: 24px;
+        left: 36px;
+        display: flex;
+        gap: 8px;
+        z-index: 200;
+      }
+      .arr-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius);
+        border: 1px solid var(--rule);
+        background: #fff;
+        color: var(--ink3);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        transition: all 0.15s;
+        box-shadow: var(--shadow-sm);
+      }
+      .arr-btn:hover {
+        background: var(--bg2);
+        color: var(--ink);
+      }
+      .cols2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        width: 100%;
+      }
+      .cols3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+        width: 100%;
+      }
+      .cols4 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 16px;
+        width: 100%;
+      }
+      .cols-40-60 {
+        display: grid;
+        grid-template-columns: 1fr 1.5fr;
+        gap: 28px;
+        width: 100%;
+        align-items: start;
+      }
+      .cols-60-40 {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 28px;
+        width: 100%;
+        align-items: center;
+      }
+      .pad {
+        padding: 20px;
+      }
+      .pad-sm {
+        padding: 14px;
+      }
+      .w100 {
+        width: 100%;
+      }
+      .mt {
+        margin-top: 12px;
+      }
+      .mt2 {
+        margin-top: 6px;
+      }
+      .center {
+        text-align: center;
+      }
+      .slide-inner {
+        width: 100%;
+        max-width: 1080px;
+        margin: auto;
+      }
+      ul.checks li {
+        list-style: none;
+        padding-left: 1.4em;
+        position: relative;
+        margin-bottom: 0.45em;
+      }
+      ul.checks li::before {
+        content: "→";
+        position: absolute;
+        left: 0;
+        color: var(--violet);
+        font-size: 0.85em;
+        font-weight: 600;
+      }
+      ul.bullets li {
+        list-style: none;
+        padding-left: 1.2em;
+        position: relative;
+        margin-bottom: 0.45em;
+      }
+      ul.bullets li::before {
+        content: "–";
+        position: absolute;
+        left: 0;
+        color: var(--ink3);
+      }
+      .sky {
+        color: var(--sky);
+      }
+      .amber {
+        color: var(--amber);
+      }
+      .violet {
+        color: var(--violet);
+      }
+      .rose {
+        color: var(--rose);
+      }
+      .green {
+        color: var(--green);
+      }
+      .bold {
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .flex-col {
+        display: flex;
+        flex-direction: column;
+      }
+      .gap-sm {
+        gap: 10px;
+      }
+      .gap {
+        gap: 16px;
+      }
+      .gap-lg {
+        gap: 24px;
+      }
+      .slide-number-bg {
+        position: absolute;
+        right: 72px;
+        top: 52px;
+        font-family: "Source Sans 3", sans-serif;
+        font-size: 6rem;
+        font-weight: 800;
+        color: var(--rule2);
+        line-height: 1;
+        pointer-events: none;
+        z-index: 0;
+        letter-spacing: -0.05em;
+      }
+      .slide-content {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+      }
+      table.data {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.83rem;
+      }
+      table.data th {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink3);
+        padding: 8px 10px;
+        border-bottom: 2px solid var(--rule);
+        text-align: left;
+        font-weight: 500;
+      }
+      table.data td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--rule2);
+        color: var(--ink2);
+      }
+      table.data tr:last-child td {
+        border-bottom: none;
+      }
+      table.data tr:hover td {
+        background: var(--bg2);
+      }
+      .title-slide,
+      .thankyou-slide,
+      .act-slide {
+        background: var(--ink);
+      }
+      .title-slide h1,
+      .thankyou-slide h2,
+      .act-slide h1,
+      .act-slide h2 {
+        color: #f5f4f0;
+      }
+      .title-slide p,
+      .thankyou-slide p,
+      .act-slide p {
+        color: rgba(245, 244, 240, 0.65);
+      }
+      .title-slide .label,
+      .thankyou-slide .label,
+      .act-slide .label {
+        color: rgba(245, 244, 240, 0.4);
+      }
+      .title-slide .rule,
+      .thankyou-slide .rule,
+      .act-slide .rule {
+        background: rgba(245, 244, 240, 0.12);
+      }
+      .title-slide .card,
+      .thankyou-slide .card,
+      .act-slide .card {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .title-slide .stat-num,
+      .thankyou-slide .stat-num,
+      .act-slide .stat-num {
+        color: #f5f4f0;
+      }
+      .title-slide .stat-lbl,
+      .thankyou-slide .stat-lbl,
+      .act-slide .stat-lbl {
+        color: rgba(245, 244, 240, 0.4);
+      }
+      .title-slide .dot,
+      .thankyou-slide .dot,
+      .act-slide .dot {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+      .title-slide .dot.on,
+      .thankyou-slide .dot.on,
+      .act-slide .dot.on {
+        background: #38bdf8;
+        border-color: #38bdf8;
+      }
+      .author-card {
+        background: #fff;
+        border: 1px solid var(--rule);
+        border-radius: var(--radius);
+        padding: 14px 20px;
+      }
+      .author-name {
+        font-family: "Source Sans 3", sans-serif;
+        font-weight: 700;
+        color: var(--ink);
+        font-size: 0.95rem;
+      }
+      .author-aff {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        color: var(--ink3);
+        letter-spacing: 0.06em;
+        margin-top: 2px;
+      }
+      .act-label {
+        display: inline-block;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.62rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink3);
+        background: var(--bg2);
+        border: 1px solid var(--rule);
+        border-radius: 2px;
+        padding: 2px 8px;
+        margin-bottom: 4px;
+      }
+      .big-q {
+        font-family: "Source Sans 3", sans-serif;
+        font-weight: 800;
+        font-size: clamp(2.2rem, 5.2vw, 4.4rem);
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        color: var(--ink);
+      }
+      .fig-slide .fig-frame {
+        height: 62vh;
+        width: 100%;
+        max-width: 1080px;
+      }
+      .fig-slide {
+        justify-content: flex-start;
+        padding-top: 34px;
+      }
+      .fig-slide .slide-content {
+        zoom: 0.8;
+      }
+      .respondent-bullet {
+        font-family: "Source Sans 3", sans-serif;
+        font-size: clamp(1rem, 1.6vw, 1.35rem);
+        line-height: 1.7;
+        color: var(--ink);
+        font-weight: 400;
+      }
+      .respondent-profile .respondent-bullet {
+        transform-origin: left center;
+      }
+      #s1.active .respondent-profile .respondent-bullet {
+        animation: respondent-pop 12s ease-in-out infinite;
+      }
+      #s1.active .respondent-profile .respondent-bullet:nth-child(1) {
+        animation-delay: 0s;
+      }
+      #s1.active .respondent-profile .respondent-bullet:nth-child(2) {
+        animation-delay: 1.7s;
+      }
+      #s1.active .respondent-profile .respondent-bullet:nth-child(3) {
+        animation-delay: 3.4s;
+      }
+      #s1.active .respondent-profile .respondent-bullet:nth-child(4) {
+        animation-delay: 5.1s;
+      }
+      #s1.active .respondent-profile .respondent-bullet:nth-child(5) {
+        animation-delay: 6.8s;
+      }
+      #s1.active .respondent-profile .respondent-bullet:nth-child(6) {
+        animation-delay: 8.5s;
+      }
+      #s1.active .respondent-profile .respondent-bullet:nth-child(7) {
+        animation-delay: 10.2s;
+      }
+      @keyframes respondent-pop {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        2% {
+          transform: scale(1.11);
+        }
+        4% {
+          transform: scale(1);
+        }
+      }
+      .predictor-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .predictor-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border: 1px solid var(--rule);
+        border-radius: 2px;
+        background: #fff;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.62rem;
+        letter-spacing: 0.02em;
+        color: var(--ink2);
+        transform-origin: center;
+      }
+      /* Group flash animations - 2 groups cycle every 6s: 0s lifestyle, 3s SES */
+      @keyframes chip-flash-lifestyle {
+        0%,
+        100% {
+          background: #fff;
+          border-color: var(--rule);
+          color: var(--ink2);
+          transform: scale(1);
+        }
+        4% {
+          background: #fef3c7;
+          border-color: #b45309;
+          color: #b45309;
+          transform: scale(1.07);
+        }
+        18% {
+          background: #fff;
+          border-color: var(--rule);
+          color: var(--ink2);
+          transform: scale(1);
+        }
+      }
+      @keyframes chip-flash-ses {
+        0%,
+        100% {
+          background: #fff;
+          border-color: var(--rule);
+          color: var(--ink2);
+          transform: scale(1);
+        }
+        4% {
+          background: #dcfce7;
+          border-color: #166534;
+          color: #166534;
+          transform: scale(1.07);
+        }
+        18% {
+          background: #fff;
+          border-color: var(--rule);
+          color: var(--ink2);
+          transform: scale(1);
+        }
+      }
+      #s4.active .chip-lifestyle {
+        animation: chip-flash-lifestyle 6s ease-in-out infinite;
+        animation-delay: 0s;
+      }
+      #s4.active .chip-ses {
+        animation: chip-flash-ses 6s ease-in-out infinite;
+        animation-delay: 3s;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="topbar"></div>
+    <div id="arrows">
+      <button class="arr-btn" id="btn-prev">&#8592;</button>
+      <button class="arr-btn" id="btn-next">&#8594;</button>
+    </div>
+    <div id="slidenum">1 / 21</div>
+    <div id="nav"></div>
+    <div id="deck">
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 1 - TITLE
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide active" id="s0">
+        <div
+          class="slide-inner flex-col gap-lg"
+          style="align-items: flex-start; max-width: 900px"
+        >
+          <div class="e flex-col gap-sm">
+            <div class="label" style="letter-spacing: 0.12em">
+              MapleMeth 2026 - Université Laval · CLESSN
+            </div>
+            <div class="rule-short" style="background: var(--sky)"></div>
+          </div>
+          <div class="e">
+            <h1 style="max-width: 880px; font-size: clamp(1.9rem, 4vw, 3.4rem)">
+              Can LLMs predict individual vote choice?<br /><span
+                style="color: var(--ink3); font-size: 64%; font-weight: 700"
+                >Yes, but a multinomial regression does it better</span
+              >
+            </h1>
+          </div>
+          <div class="e rule" style="margin: 0"></div>
+          <div class="e" style="display: flex; gap: 16px; flex-wrap: wrap">
+            <div class="author-card">
+              <div class="author-name">Laurence-Olivier M. Foisy</div>
+              <div
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  font-size: 0.7rem;
+                  color: var(--ink3);
+                  margin-top: 2px;
+                "
+              >
+                mail@mfoisy.com
+              </div>
+              <div class="author-aff">Université Laval</div>
+            </div>
+            <div class="author-card">
+              <div class="author-name">Yannick Dufresne</div>
+              <div
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  font-size: 0.7rem;
+                  color: var(--ink3);
+                  margin-top: 2px;
+                "
+              >
+                yannick.dufresne@pol.ulaval.ca
+              </div>
+              <div class="author-aff">Université Laval</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 2 - MEET THIS RESPONDENT
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s1">
+        <div class="slide-number-bg">02</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">The respondent</span
+              ><span class="tag tag-violet">Profile · ID 100566</span>
+            </div>
+            <div class="e">
+              <h2>Meet respondent #100566</h2>
+              <div class="rule-short"></div>
+            </div>
+            <div class="cols2 e" style="align-items: stretch">
+              <div
+                class="card-violet pad flex-col gap-sm"
+                style="
+                  border-top: 3px solid var(--violet);
+                  justify-content: center;
+                "
+              >
+                <div class="label">Verbatim profile fields</div>
+                <ul class="bullets respondent-profile" style="margin-top: 4px">
+                  <li class="respondent-bullet">38-year-old man</li>
+                  <li class="respondent-bullet">High school education</li>
+                  <li class="respondent-bullet">
+                    Lives in a stand-alone house
+                  </li>
+                  <li class="respondent-bullet">
+                    Buys his coffee at Tim Hortons
+                  </li>
+                  <li class="respondent-bullet">
+                    Drinks beer and eats meat regularly
+                  </li>
+                  <li class="respondent-bullet">
+                    Goes hunting and fishing frequently
+                  </li>
+                  <li class="respondent-bullet">
+                    Rides ATVs and snowmobiles frequently
+                  </li>
+                </ul>
+              </div>
+              <div
+                class="card pad flex-col gap-sm"
+                style="
+                  border-top: 3px solid var(--rule);
+                  justify-content: center;
+                  align-items: center;
+                  text-align: center;
+                  gap: 16px;
+                "
+              >
+                <h3 style="max-width: 340px">
+                  You can probably guess who this respondent votes for.
+                </h3>
+                <img
+                  src="assets/cpc.png"
+                  alt="Conservative Party of Canada logo"
+                  style="width: 110px; height: 110px; object-fit: contain"
+                />
+                <div
+                  style="
+                    color: var(--ink3);
+                    font-size: 1rem;
+                    font-style: italic;
+                  "
+                >
+                  Can the LLM make the same call?
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 3 - BIG QUESTION
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s2">
+        <div class="slide-content w100">
+          <div
+            class="slide-inner flex-col gap-lg"
+            style="align-items: center; text-align: center"
+          >
+            <div class="e">
+              <span class="act-label">The respondent</span>
+            </div>
+            <div class="e">
+              <div class="rule-short" style="margin: 0 auto"></div>
+            </div>
+            <div class="e" style="max-width: 1000px">
+              <div class="big-q">
+                Can LLMs predict individual vote choice?
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 4 - SO WHAT?
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s2b">
+        <div class="slide-number-bg">04</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">The respondent</span
+              ><span class="tag tag-amber">So what?</span>
+            </div>
+            <div class="e">
+              <h2>Why would you want LLMs to predict vote intentions?</h2>
+              <div class="rule-short" style="background: var(--amber)"></div>
+            </div>
+            <div class="cols2 e" style="align-items: stretch">
+              <div
+                class="card-violet pad flex-col gap-sm"
+                style="border-top: 3px solid var(--violet)"
+              >
+                <h3>General-purpose inference</h3>
+                <p>
+                  If LLMs can predict vote, it could mean they can infer other
+                  hard-to-measure variables from the same respondent profile.
+                </p>
+              </div>
+              <div
+                class="card-amber pad flex-col gap-sm"
+                style="border-top: 3px solid var(--amber)"
+              >
+                <h3>Data imputation</h3>
+                <p>
+                  Missing values, skipped questions, and incomplete batteries
+                  become candidates for model-assisted imputation.
+                </p>
+              </div>
+            </div>
+            <div class="cols2 e" style="align-items: stretch">
+              <div
+                class="card-sky pad flex-col gap-sm"
+                style="border-top: 3px solid var(--sky)"
+              >
+                <h3>Survey repair</h3>
+                <p>
+                  Forgot to include a variable in your survey? A valid predictor
+                  could let you create an approximate version after the fact.
+                </p>
+              </div>
+              <div
+                class="card-green pad flex-col gap-sm"
+                style="border-top: 3px solid var(--green)"
+              >
+                <h3>Unstructured text</h3>
+                <p>
+                  Social media posts and other open-ended traces could become
+                  inputs for predicting vote intentions at scale.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 5 - SILICON SAMPLING (LITERATURE)
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s3">
+        <div class="slide-number-bg">05</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">The respondent</span
+              ><span class="tag tag-sky">Literature</span>
+            </div>
+            <div class="e">
+              <h2>Silicon sampling</h2>
+              <div class="rule-short"></div>
+            </div>
+            <div class="cols2 e">
+              <div
+                class="card-violet pad flex-col gap-sm"
+                style="border-top: 3px solid var(--violet)"
+              >
+                <h3>Aggregate success</h3>
+                <p>
+                  LLMs can reproduce subgroup-level opinion distributions under
+                  demographic conditioning, but estimates remain sensitive to
+                  model choice, prompt wording, and target group.
+                </p>
+                <p class="small" style="margin-top: 6px">
+                  Argyle et al. 2023 · Santurkar et al. 2023 · Bisbee et al. 2024
+                </p>
+              </div>
+              <div
+                class="card-sky pad flex-col gap-sm"
+                style="border-top: 3px solid var(--sky)"
+              >
+                <h3>Individual-level limits</h3>
+                <p>
+                  Group averages can look plausible while predictions for
+                  specific respondents remain weak. Persona prompts often
+                  flatten real variation, and multiparty, non-US settings are
+                  harder tests.
+                </p>
+                <p class="small" style="margin-top: 6px">
+                  Röttger et al. 2023 · von der Heyde et al. 2025 · Taday Morocho et al. 2026
+                </p>
+              </div>
+            </div>
+            <div
+              class="e card-amber pad-sm"
+              style="border-radius: var(--radius)"
+            >
+              <table style="width:100%; border-collapse:collapse; font-size:0.88em; line-height:1.5">
+                <thead>
+                  <tr>
+                    <th style="text-align:left; padding:2px 12px 2px 0; font-weight:600; border-bottom:1px solid rgba(0,0,0,.15)">Gap in literature</th>
+                    <th style="text-align:left; padding:2px 0; font-weight:600; border-bottom:1px solid rgba(0,0,0,.15)">Our test</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="padding:3px 12px 3px 0">Aggregate ≠ individual</td>
+                    <td>1,000-respondent individual-level holdout</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:3px 12px 3px 0">US ≠ Canada</td>
+                    <td>Datagotchi Canada, 5-party system</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:3px 12px 3px 0">Demographics ≠ lifestyle</td>
+                    <td>Datagotchi behavioural variables</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 6 - SETUP
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s4">
+        <div class="slide-number-bg">06</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">The respondent</span
+              ><span class="tag tag-ink">Setup</span>
+            </div>
+            <div class="e">
+              <h2>Setup</h2>
+              <div class="rule-short"></div>
+            </div>
+            <div class="cols2 e">
+              <div
+                class="card pad flex-col gap-sm"
+                style="border-top: 3px solid var(--rule)"
+              >
+                <h3>Data</h3>
+                <p>
+                  Datagotchi Canada - <strong>n = 104,564</strong> total
+                  respondents.
+                </p>
+                <p>
+                  Evaluation subsample - <strong>n = 1,000</strong> held-out
+                  respondents.
+                </p>
+                <h3 style="margin-top: 10px">Predictors</h3>
+                <p>
+                  <strong
+                    >24 <span style="color: #166534">SES</span> +
+                    <span style="color: #b45309">lifestyle</span>
+                    features</strong
+                  >
+                  per respondent:
+                </p>
+                <div class="predictor-cloud" aria-label="24 profile predictors">
+                  <span class="predictor-chip chip-lifestyle"
+                    >Immigrant status</span
+                  >
+                  <span class="predictor-chip chip-lifestyle"
+                    >Transport mode</span
+                  >
+                  <span class="predictor-chip chip-lifestyle"
+                    >Clothing shopping</span
+                  >
+                  <span class="predictor-chip chip-lifestyle"
+                    >Exercise style</span
+                  >
+                  <span class="predictor-chip chip-lifestyle"
+                    >Meat frequency</span
+                  >
+                  <span class="predictor-chip chip-lifestyle"
+                    >Preferred alcohol</span
+                  >
+                  <span class="predictor-chip chip-lifestyle"
+                    >Coffee source</span
+                  >
+                  <span class="predictor-chip chip-lifestyle">Language</span>
+                  <span class="predictor-chip chip-lifestyle"
+                    >Smoking frequency</span
+                  >
+                  <span class="predictor-chip chip-ses">Age</span>
+                  <span class="predictor-chip chip-ses">Dwelling type</span>
+                  <span class="predictor-chip chip-ses">White identity</span>
+                  <span class="predictor-chip chip-ses"
+                    >Heterosexual identity</span
+                  >
+                  <span class="predictor-chip chip-ses">Gender</span>
+                  <span class="predictor-chip chip-lifestyle"
+                    >Clothing style group</span
+                  >
+                  <span class="predictor-chip chip-lifestyle"
+                    >Hunting frequency</span
+                  >
+                  <span class="predictor-chip chip-lifestyle">Fishing</span>
+                  <span class="predictor-chip chip-lifestyle"
+                    >Museums or galleries</span
+                  >
+                  <span class="predictor-chip chip-lifestyle"
+                    >Volunteering frequency</span
+                  >
+                  <span class="predictor-chip chip-lifestyle"
+                    >Motorized outdoor activity</span
+                  >
+                  <span class="predictor-chip chip-lifestyle">Tattoos</span>
+                  <span class="predictor-chip chip-ses">Education</span>
+                  <span class="predictor-chip chip-ses">Income group</span>
+                  <span class="predictor-chip chip-lifestyle"
+                    >Pet ownership</span
+                  >
+                </div>
+              </div>
+              <div
+                class="card-sky pad flex-col gap-sm"
+                style="border-top: 3px solid var(--sky)"
+              >
+                <h3>Classes</h3>
+                <div
+                  style="
+                    display: flex;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                    margin-top: 4px;
+                  "
+                >
+                  <span class="pill pill-lpc">LPC</span>
+                  <span class="pill pill-cpc">CPC</span>
+                  <span class="pill pill-ndp">NDP</span>
+                  <span class="pill pill-bq">BQ</span>
+                  <span class="pill pill-gpc">GPC</span>
+                </div>
+                <h3 style="margin-top: 10px">Metric</h3>
+                <p>Accuracy with bootstrap 95% CI.</p>
+                <h3 style="margin-top: 10px">Sample distribution</h3>
+                <div
+                  style="
+                    font-size: 0.72rem;
+                    color: var(--ink2);
+                    margin-bottom: 3px;
+                  "
+                >
+                  Full sample (n = 104,564)
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 3px">
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--lpc);
+                      "
+                      >LPC</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 33.1%; background: var(--lpc)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >33.1%</span
+                    >
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--cpc);
+                      "
+                      >CPC</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 22.6%; background: var(--cpc)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >22.6%</span
+                    >
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--bq);
+                      "
+                      >BQ</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 19.7%; background: var(--bq)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >19.7%</span
+                    >
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--ndp);
+                      "
+                      >NDP</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 15.6%; background: var(--ndp)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >15.6%</span
+                    >
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--gpc);
+                      "
+                      >GPC</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 2%; background: var(--gpc)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >2.0%</span
+                    >
+                  </div>
+                </div>
+                <div
+                  style="
+                    font-size: 0.72rem;
+                    color: var(--ink2);
+                    margin-top: 8px;
+                    margin-bottom: 3px;
+                  "
+                >
+                  Held-out sample (n = 1,000)
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 3px">
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--lpc);
+                      "
+                      >LPC</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 38.3%; background: var(--lpc)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >38.3%</span
+                    >
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--cpc);
+                      "
+                      >CPC</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 22.7%; background: var(--cpc)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >22.7%</span
+                    >
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--bq);
+                      "
+                      >BQ</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 20.7%; background: var(--bq)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >20.7%</span
+                    >
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--ndp);
+                      "
+                      >NDP</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 16.4%; background: var(--ndp)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >16.4%</span
+                    >
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px">
+                    <span
+                      style="
+                        width: 26px;
+                        font-size: 0.68rem;
+                        font-weight: 700;
+                        color: var(--gpc);
+                      "
+                      >GPC</span
+                    >
+                    <div class="pbar-wrap" style="flex: 1">
+                      <div
+                        class="pbar"
+                        style="--w: 1.9%; background: var(--gpc)"
+                      ></div>
+                    </div>
+                    <span
+                      style="
+                        width: 30px;
+                        font-size: 0.68rem;
+                        text-align: right;
+                        color: var(--ink2);
+                      "
+                      >1.9%</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              class="e card-violet pad-sm"
+              style="border-radius: var(--radius)"
+            >
+              <p>
+                Frozen prompt, temperature 0, identical respondents across all
+                five LLMs.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 7 - BLOCK 1: FRONTIER LLM COMPARISON
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s5">
+        <div class="slide-number-bg">07</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">The respondent</span
+              ><span class="tag tag-violet">LLM comparison</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>Can frontier LLMs predict vote choice?</h2>
+              <div class="rule-short" style="margin: 10px auto"></div>
+            </div>
+            <div
+              class="e"
+              style="width: 100%; display: flex; justify-content: center"
+            >
+              <div class="fig-frame">
+                <img
+                  src="figures/block1_fig1_accuracy.png"
+                  alt="Block 1 - accuracy across frontier LLMs"
+                />
+              </div>
+            </div>
+            <div class="e small" style="text-align: center; max-width: 880px">
+              All four frontier LLMs cluster within a few accuracy points. We
+              picked GPT-4o for the rest of the analysis: cost-efficient, no
+              meaningful performance loss.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 8 - BLOCK 2: MULTINOMIAL 55.9%
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s7">
+        <div class="slide-number-bg">08</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the ceiling sits</span
+              ><span class="tag tag-amber">Baseline</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>Multinomial regression: 55.9%</h2>
+              <div
+                class="rule-short"
+                style="margin: 10px auto; background: var(--amber)"
+              ></div>
+            </div>
+            <div
+              class="e"
+              style="width: 100%; display: flex; justify-content: center"
+            >
+              <div class="fig-frame">
+                <img
+                  src="figures/block2_fig1_accuracy.png"
+                  alt="Block 2 - multinomial vs gpt-4o accuracy"
+                />
+              </div>
+            </div>
+            <div class="e small" style="text-align: center; max-width: 880px">
+              Same n = 1,000, same 24 features.
+              <strong>gpt-4o 47.1%, multinomial 55.9%.</strong> McNemar p &lt;
+              0.0001. <strong>8.8 points.</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 9 - BLOCK 4: PROMPT VARIANTS OVERVIEW
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s8b">
+        <div class="slide-number-bg">09</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the ceiling sits</span
+              ><span class="tag tag-rose">Prompt engineering</span>
+            </div>
+            <div class="e">
+              <h2>Six prompt engineering strategies</h2>
+              <div class="rule-short" style="background: var(--rose)"></div>
+            </div>
+
+            <!-- 3x2 grid of flow diagrams -->
+            <div
+              class="e"
+              style="
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+                align-items: stretch;
+              "
+            >
+              <!-- P0: BASELINE -->
+              <div
+                class="card pad"
+                style="display: flex; flex-direction: column; gap: 8px"
+              >
+                <span class="label">Baseline</span>
+                <svg
+                  viewBox="0 0 200 90"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="width: 100%; height: auto"
+                >
+                  <rect
+                    x="4"
+                    y="20"
+                    width="52"
+                    height="50"
+                    rx="4"
+                    fill="#f5f4f0"
+                    stroke="#d4d0c8"
+                    stroke-width="1.2"
+                  />
+                  <text
+                    x="30"
+                    y="37"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    respondent
+                  </text>
+                  <text
+                    x="30"
+                    y="47"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    profile
+                  </text>
+                  <line
+                    x1="14"
+                    y1="56"
+                    x2="46"
+                    y2="56"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="14"
+                    y1="61"
+                    x2="40"
+                    y2="61"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="14"
+                    y1="66"
+                    x2="43"
+                    y2="66"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="57"
+                    y1="45"
+                    x2="76"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="76,41 84,45 76,49" fill="#b0aca0" />
+                  <rect
+                    x="84"
+                    y="28"
+                    width="42"
+                    height="34"
+                    rx="4"
+                    fill="#1a1714"
+                  />
+                  <text
+                    x="105"
+                    y="46"
+                    text-anchor="middle"
+                    font-size="7.5"
+                    fill="#f5f4f0"
+                    font-weight="600"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    GPT-4o
+                  </text>
+                  <line
+                    x1="127"
+                    y1="45"
+                    x2="146"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="146,41 154,45 146,49" fill="#b0aca0" />
+                  <rect
+                    x="154"
+                    y="33"
+                    width="40"
+                    height="24"
+                    rx="4"
+                    fill="#ede9f8"
+                    stroke="rgba(91,33,182,0.25)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="174"
+                    y="44"
+                    text-anchor="middle"
+                    font-size="6.5"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    LPC
+                  </text>
+                  <text
+                    x="174"
+                    y="53"
+                    text-anchor="middle"
+                    font-size="6"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    CPC ...
+                  </text>
+                  <text
+                    x="100"
+                    y="82"
+                    text-anchor="middle"
+                    font-size="6.2"
+                    fill="#9a9690"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    No extra instructions
+                  </text>
+                </svg>
+              </div>
+
+              <!-- P1: FEATURE GLOSSARY -->
+              <div
+                class="card pad"
+                style="display: flex; flex-direction: column; gap: 8px"
+              >
+                <span class="label">Feature glossary</span>
+                <svg
+                  viewBox="0 0 200 90"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="width: 100%; height: auto"
+                >
+                  <rect
+                    x="4"
+                    y="20"
+                    width="52"
+                    height="50"
+                    rx="4"
+                    fill="#f5f4f0"
+                    stroke="#d4d0c8"
+                    stroke-width="1.2"
+                  />
+                  <text
+                    x="30"
+                    y="37"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    respondent
+                  </text>
+                  <text
+                    x="30"
+                    y="47"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    profile
+                  </text>
+                  <line
+                    x1="14"
+                    y1="56"
+                    x2="46"
+                    y2="56"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="14"
+                    y1="61"
+                    x2="40"
+                    y2="61"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="14"
+                    y1="66"
+                    x2="43"
+                    y2="66"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <rect
+                    x="56"
+                    y="6"
+                    width="56"
+                    height="22"
+                    rx="3"
+                    fill="#fdf3e3"
+                    stroke="rgba(180,83,9,0.3)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="84"
+                    y="15"
+                    text-anchor="middle"
+                    font-size="6"
+                    fill="#b45309"
+                    font-family="Source Sans 3,sans-serif"
+                    font-weight="600"
+                  >
+                    + variable glossary
+                  </text>
+                  <text
+                    x="84"
+                    y="23"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#b45309"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    24 field definitions
+                  </text>
+                  <line
+                    x1="84"
+                    y1="28"
+                    x2="84"
+                    y2="40"
+                    stroke="#b45309"
+                    stroke-width="1"
+                    stroke-dasharray="2,2"
+                  />
+                  <line
+                    x1="57"
+                    y1="45"
+                    x2="76"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="76,41 84,45 76,49" fill="#b0aca0" />
+                  <rect
+                    x="84"
+                    y="28"
+                    width="42"
+                    height="34"
+                    rx="4"
+                    fill="#1a1714"
+                  />
+                  <text
+                    x="105"
+                    y="46"
+                    text-anchor="middle"
+                    font-size="7.5"
+                    fill="#f5f4f0"
+                    font-weight="600"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    GPT-4o
+                  </text>
+                  <line
+                    x1="127"
+                    y1="45"
+                    x2="146"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="146,41 154,45 146,49" fill="#b0aca0" />
+                  <rect
+                    x="154"
+                    y="33"
+                    width="40"
+                    height="24"
+                    rx="4"
+                    fill="#ede9f8"
+                    stroke="rgba(91,33,182,0.25)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="174"
+                    y="44"
+                    text-anchor="middle"
+                    font-size="6.5"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    LPC
+                  </text>
+                  <text
+                    x="174"
+                    y="53"
+                    text-anchor="middle"
+                    font-size="6"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    CPC ...
+                  </text>
+                  <text
+                    x="100"
+                    y="82"
+                    text-anchor="middle"
+                    font-size="6.2"
+                    fill="#9a9690"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    Reduce variable name ambiguity
+                  </text>
+                </svg>
+              </div>
+
+              <!-- P2: CALIBRATED ACCURACY -->
+              <div
+                class="card pad"
+                style="display: flex; flex-direction: column; gap: 8px"
+              >
+                <span class="label">Calibrated accuracy</span>
+                <svg
+                  viewBox="0 0 200 90"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="width: 100%; height: auto"
+                >
+                  <rect
+                    x="4"
+                    y="20"
+                    width="52"
+                    height="50"
+                    rx="4"
+                    fill="#f5f4f0"
+                    stroke="#d4d0c8"
+                    stroke-width="1.2"
+                  />
+                  <text
+                    x="30"
+                    y="37"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    respondent
+                  </text>
+                  <text
+                    x="30"
+                    y="47"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    profile
+                  </text>
+                  <line
+                    x1="14"
+                    y1="56"
+                    x2="46"
+                    y2="56"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="14"
+                    y1="61"
+                    x2="40"
+                    y2="61"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="14"
+                    y1="66"
+                    x2="43"
+                    y2="66"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="57"
+                    y1="45"
+                    x2="76"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="76,41 84,45 76,49" fill="#b0aca0" />
+                  <rect
+                    x="84"
+                    y="28"
+                    width="42"
+                    height="34"
+                    rx="4"
+                    fill="#1a1714"
+                  />
+                  <text
+                    x="105"
+                    y="43"
+                    text-anchor="middle"
+                    font-size="7.5"
+                    fill="#f5f4f0"
+                    font-weight="600"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    GPT-4o
+                  </text>
+                  <rect
+                    x="87"
+                    y="51"
+                    width="36"
+                    height="8"
+                    rx="2"
+                    fill="rgba(253,243,227,0.18)"
+                  />
+                  <text
+                    x="105"
+                    y="57.5"
+                    text-anchor="middle"
+                    font-size="5.2"
+                    fill="#fde68a"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    weigh full profile
+                  </text>
+                  <line
+                    x1="127"
+                    y1="45"
+                    x2="146"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="146,41 154,45 146,49" fill="#b0aca0" />
+                  <rect
+                    x="154"
+                    y="33"
+                    width="40"
+                    height="24"
+                    rx="4"
+                    fill="#ede9f8"
+                    stroke="rgba(91,33,182,0.25)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="174"
+                    y="44"
+                    text-anchor="middle"
+                    font-size="6.5"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    LPC
+                  </text>
+                  <text
+                    x="174"
+                    y="53"
+                    text-anchor="middle"
+                    font-size="6"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    CPC ...
+                  </text>
+                  <text
+                    x="100"
+                    y="82"
+                    text-anchor="middle"
+                    font-size="6.2"
+                    fill="#9a9690"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    Don't over-index on one cue
+                  </text>
+                </svg>
+              </div>
+
+              <!-- P3: SOFT BLOC CALIBRATION -->
+              <div
+                class="card pad"
+                style="display: flex; flex-direction: column; gap: 8px"
+              >
+                <span class="label">Soft BQ calibration</span>
+                <svg
+                  viewBox="0 0 200 90"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="width: 100%; height: auto"
+                >
+                  <rect
+                    x="4"
+                    y="20"
+                    width="52"
+                    height="50"
+                    rx="4"
+                    fill="#f5f4f0"
+                    stroke="#d4d0c8"
+                    stroke-width="1.2"
+                  />
+                  <text
+                    x="30"
+                    y="37"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    respondent
+                  </text>
+                  <text
+                    x="30"
+                    y="47"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    profile
+                  </text>
+                  <line
+                    x1="14"
+                    y1="56"
+                    x2="46"
+                    y2="56"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <rect
+                    x="10"
+                    y="58"
+                    width="40"
+                    height="8"
+                    rx="2"
+                    fill="rgba(8,145,178,0.15)"
+                  />
+                  <text
+                    x="30"
+                    y="64"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#0891b2"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    language: french
+                  </text>
+                  <line
+                    x1="14"
+                    y1="66"
+                    x2="43"
+                    y2="66"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <rect
+                    x="56"
+                    y="6"
+                    width="58"
+                    height="22"
+                    rx="3"
+                    fill="#e0f2fe"
+                    stroke="rgba(8,145,178,0.35)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="85"
+                    y="15"
+                    text-anchor="middle"
+                    font-size="6"
+                    fill="#0369a1"
+                    font-family="Source Sans 3,sans-serif"
+                    font-weight="600"
+                  >
+                    French &#x2260; BQ alone
+                  </text>
+                  <text
+                    x="85"
+                    y="23"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#0369a1"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    check full profile first
+                  </text>
+                  <line
+                    x1="85"
+                    y1="28"
+                    x2="85"
+                    y2="40"
+                    stroke="#0891b2"
+                    stroke-width="1"
+                    stroke-dasharray="2,2"
+                  />
+                  <line
+                    x1="57"
+                    y1="45"
+                    x2="76"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="76,41 84,45 76,49" fill="#b0aca0" />
+                  <rect
+                    x="84"
+                    y="28"
+                    width="42"
+                    height="34"
+                    rx="4"
+                    fill="#1a1714"
+                  />
+                  <text
+                    x="105"
+                    y="46"
+                    text-anchor="middle"
+                    font-size="7.5"
+                    fill="#f5f4f0"
+                    font-weight="600"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    GPT-4o
+                  </text>
+                  <line
+                    x1="127"
+                    y1="45"
+                    x2="146"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="146,41 154,45 146,49" fill="#b0aca0" />
+                  <rect
+                    x="154"
+                    y="33"
+                    width="40"
+                    height="24"
+                    rx="4"
+                    fill="#ede9f8"
+                    stroke="rgba(91,33,182,0.25)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="174"
+                    y="44"
+                    text-anchor="middle"
+                    font-size="6.5"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    LPC
+                  </text>
+                  <text
+                    x="174"
+                    y="53"
+                    text-anchor="middle"
+                    font-size="6"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    CPC ...
+                  </text>
+                  <text
+                    x="100"
+                    y="82"
+                    text-anchor="middle"
+                    font-size="6.2"
+                    fill="#9a9690"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    Fix one known systematic error
+                  </text>
+                </svg>
+              </div>
+
+              <!-- P4: STRUCTURED SILENT RUBRIC -->
+              <div
+                class="card pad"
+                style="display: flex; flex-direction: column; gap: 8px"
+              >
+                <span class="label">Structured rubric</span>
+                <svg
+                  viewBox="0 0 200 90"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="width: 100%; height: auto"
+                >
+                  <rect
+                    x="4"
+                    y="20"
+                    width="52"
+                    height="50"
+                    rx="4"
+                    fill="#f5f4f0"
+                    stroke="#d4d0c8"
+                    stroke-width="1.2"
+                  />
+                  <text
+                    x="30"
+                    y="37"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    respondent
+                  </text>
+                  <text
+                    x="30"
+                    y="47"
+                    text-anchor="middle"
+                    font-size="7"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    profile
+                  </text>
+                  <line
+                    x1="14"
+                    y1="56"
+                    x2="46"
+                    y2="56"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="14"
+                    y1="61"
+                    x2="40"
+                    y2="61"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="14"
+                    y1="66"
+                    x2="43"
+                    y2="66"
+                    stroke="#d4d0c8"
+                    stroke-width="1"
+                  />
+                  <line
+                    x1="57"
+                    y1="45"
+                    x2="76"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="76,41 84,45 76,49" fill="#b0aca0" />
+                  <rect
+                    x="84"
+                    y="22"
+                    width="42"
+                    height="46"
+                    rx="4"
+                    fill="#1a1714"
+                  />
+                  <text
+                    x="105"
+                    y="33"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#94a3b8"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    1. SES signals
+                  </text>
+                  <line
+                    x1="92"
+                    y1="36"
+                    x2="118"
+                    y2="36"
+                    stroke="#334155"
+                    stroke-width="0.8"
+                  />
+                  <text
+                    x="105"
+                    y="43"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#94a3b8"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    2. Lifestyle
+                  </text>
+                  <line
+                    x1="92"
+                    y1="46"
+                    x2="118"
+                    y2="46"
+                    stroke="#334155"
+                    stroke-width="0.8"
+                  />
+                  <text
+                    x="105"
+                    y="53"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#94a3b8"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    3. Language
+                  </text>
+                  <line
+                    x1="92"
+                    y1="56"
+                    x2="118"
+                    y2="56"
+                    stroke="#334155"
+                    stroke-width="0.8"
+                  />
+                  <text
+                    x="105"
+                    y="63"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#f5f4f0"
+                    font-weight="700"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    predict
+                  </text>
+                  <line
+                    x1="127"
+                    y1="45"
+                    x2="146"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="146,41 154,45 146,49" fill="#b0aca0" />
+                  <rect
+                    x="154"
+                    y="33"
+                    width="40"
+                    height="24"
+                    rx="4"
+                    fill="#ede9f8"
+                    stroke="rgba(91,33,182,0.25)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="174"
+                    y="44"
+                    text-anchor="middle"
+                    font-size="6.5"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    LPC
+                  </text>
+                  <text
+                    x="174"
+                    y="53"
+                    text-anchor="middle"
+                    font-size="6"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    CPC ...
+                  </text>
+                  <text
+                    x="100"
+                    y="82"
+                    text-anchor="middle"
+                    font-size="6.2"
+                    fill="#9a9690"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    Silent chain-of-thought, JSON only out
+                  </text>
+                </svg>
+              </div>
+
+              <!-- P5/P6: FEW-SHOT -->
+              <div
+                class="card pad"
+                style="display: flex; flex-direction: column; gap: 8px"
+              >
+                <span class="label">Few-shot examples</span>
+                <svg
+                  viewBox="0 0 200 90"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style="width: 100%; height: auto"
+                >
+                  <rect
+                    x="4"
+                    y="4"
+                    width="46"
+                    height="12"
+                    rx="2"
+                    fill="#e8f5ee"
+                    stroke="rgba(21,128,61,0.3)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="27"
+                    y="12"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#166534"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    example: LPC
+                  </text>
+                  <rect
+                    x="4"
+                    y="18"
+                    width="46"
+                    height="12"
+                    rx="2"
+                    fill="#e0f2fe"
+                    stroke="rgba(8,145,178,0.3)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="27"
+                    y="26"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#0369a1"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    example: CPC
+                  </text>
+                  <rect
+                    x="4"
+                    y="32"
+                    width="46"
+                    height="12"
+                    rx="2"
+                    fill="#fdf3e3"
+                    stroke="rgba(180,83,9,0.3)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="27"
+                    y="40"
+                    text-anchor="middle"
+                    font-size="5.5"
+                    fill="#b45309"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    example: NDP
+                  </text>
+                  <text
+                    x="27"
+                    y="52"
+                    text-anchor="middle"
+                    font-size="8"
+                    fill="#b0aca0"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    &#8942;
+                  </text>
+                  <rect
+                    x="4"
+                    y="58"
+                    width="46"
+                    height="20"
+                    rx="3"
+                    fill="#f5f4f0"
+                    stroke="#d4d0c8"
+                    stroke-width="1.2"
+                  />
+                  <text
+                    x="27"
+                    y="68"
+                    text-anchor="middle"
+                    font-size="6"
+                    fill="#6b6860"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    query profile
+                  </text>
+                  <text
+                    x="27"
+                    y="75"
+                    text-anchor="middle"
+                    font-size="5"
+                    fill="#9a9690"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    predict this one
+                  </text>
+                  <line
+                    x1="51"
+                    y1="45"
+                    x2="70"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="70,41 78,45 70,49" fill="#b0aca0" />
+                  <rect
+                    x="78"
+                    y="28"
+                    width="42"
+                    height="34"
+                    rx="4"
+                    fill="#1a1714"
+                  />
+                  <text
+                    x="99"
+                    y="46"
+                    text-anchor="middle"
+                    font-size="7.5"
+                    fill="#f5f4f0"
+                    font-weight="600"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    GPT-4o
+                  </text>
+                  <line
+                    x1="121"
+                    y1="45"
+                    x2="140"
+                    y2="45"
+                    stroke="#b0aca0"
+                    stroke-width="1.5"
+                  />
+                  <polygon points="140,41 148,45 140,49" fill="#b0aca0" />
+                  <rect
+                    x="148"
+                    y="33"
+                    width="46"
+                    height="24"
+                    rx="4"
+                    fill="#ede9f8"
+                    stroke="rgba(91,33,182,0.25)"
+                    stroke-width="1"
+                  />
+                  <text
+                    x="171"
+                    y="44"
+                    text-anchor="middle"
+                    font-size="6.5"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    LPC
+                  </text>
+                  <text
+                    x="171"
+                    y="53"
+                    text-anchor="middle"
+                    font-size="6"
+                    fill="#5b21b6"
+                    font-family="JetBrains Mono,monospace"
+                  >
+                    CPC ...
+                  </text>
+                  <text
+                    x="99"
+                    y="82"
+                    text-anchor="middle"
+                    font-size="6.2"
+                    fill="#9a9690"
+                    font-family="Source Sans 3,sans-serif"
+                  >
+                    Balanced vs. corrective examples
+                  </text>
+                </svg>
+              </div>
+            </div>
+            <!-- /grid -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 10 - BLOCK 4: BETTER PROMPTS?
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s8">
+        <div class="slide-number-bg">10</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the ceiling sits</span
+              ><span class="tag tag-rose">Prompt engineering</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>Better prompts?</h2>
+              <div
+                class="rule-short"
+                style="margin: 10px auto; background: var(--rose)"
+              ></div>
+            </div>
+            <div
+              class="e"
+              style="width: 100%; display: flex; justify-content: center"
+            >
+              <div class="fig-frame">
+                <img
+                  src="figures/block4_fig2_confirmatory_accuracy.png"
+                  alt="Block 4 - prompt engineering variants"
+                />
+              </div>
+            </div>
+            <div class="e small" style="text-align: center; max-width: 880px">
+              Prompt engineering across multiple variants. Minimal movement. The
+              gap is not about prompt quality.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 11 - BLOCK 5: PERSONA PROMPTS?
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s9">
+        <div class="slide-number-bg">11</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the ceiling sits</span
+              ><span class="tag tag-rose">Persona simulation</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>Persona prompts?</h2>
+              <div
+                class="rule-short"
+                style="margin: 10px auto; background: var(--rose)"
+              ></div>
+            </div>
+            <div
+              class="e"
+              style="width: 100%; display: flex; justify-content: center"
+            >
+              <div class="fig-frame">
+                <img
+                  src="figures/block5_fig2_accuracy_dot.png"
+                  alt="Block 5 - persona framing"
+                />
+              </div>
+            </div>
+            <div class="e small" style="text-align: center; max-width: 880px">
+              Persona framing. Minimal movement. The gap is not about
+              elicitation.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 12 - BLOCK 7: OPEN-ENDED SELF-DESCRIPTION?
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s10">
+        <div class="slide-number-bg">12</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the ceiling sits</span
+              ><span class="tag tag-sky">Open-ended questions</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>Open-ended self-description?</h2>
+              <div
+                class="rule-short"
+                style="margin: 10px auto; background: var(--sky)"
+              ></div>
+            </div>
+            <div
+              class="e"
+              style="width: 100%; display: flex; justify-content: center"
+            >
+              <div class="fig-frame">
+                <img
+                  src="figures/block7_accuracy_by_condition.png"
+                  alt="Block 7 - open vs closed SES"
+                />
+              </div>
+            </div>
+            <div class="e small" style="text-align: center; max-width: 880px">
+              Letting respondents describe themselves in their own words barely
+              closes the gap. The gap is not about input richness.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 13 - BLOCK 6: FINE-TUNING & HYBRID
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s11">
+        <div class="slide-number-bg">13</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the ceiling sits</span
+              ><span class="tag tag-amber">Hybrid approach</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>Fine-tuning? Hybrid priors?</h2>
+              <div
+                class="rule-short"
+                style="margin: 10px auto; background: var(--amber)"
+              ></div>
+            </div>
+            <div
+              class="e"
+              style="width: 100%; display: flex; justify-content: center"
+            >
+              <div class="fig-frame" style="height: 52vh">
+                <img
+                  src="figures/block6_accuracy_by_condition.png"
+                  alt="Block 6 - fine-tuning and hybridization"
+                />
+              </div>
+            </div>
+            <div
+              class="e card-amber pad-sm"
+              style="
+                border-radius: var(--radius);
+                max-width: 1000px;
+                border-left: 3px solid var(--amber);
+              "
+            >
+              <p>
+                Fine-tuning moves the needle a bit.
+                <strong>The augmented prompt hybrid hits 53.5%</strong>
+                - but it is not pure LLM: it feeds multinomial priors into the
+                GPT-4o prompt. To recover the conventional-model gap you have to
+                give the LLM the conventional-model output.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 14 - PIVOT: CEILING BELOW FLOOR
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s12">
+        <div class="slide-content w100">
+          <div
+            class="slide-inner flex-col gap-lg"
+            style="align-items: center; text-align: center"
+          >
+            <div class="e">
+              <span class="act-label">Where the ceiling sits</span>
+            </div>
+            <div class="e">
+              <div
+                class="rule-short"
+                style="margin: 0 auto; background: var(--amber)"
+              ></div>
+            </div>
+            <div class="e" style="max-width: 1100px">
+              <div class="big-q">
+                Off the shelf, the LLM ceiling sits below the conventional-model
+                floor.
+              </div>
+            </div>
+            <div class="e small" style="max-width: 720px">
+              So where do the errors actually live?
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 15 - BLOCK 8: WHAT IS THE MODEL ACTUALLY PREDICTING?
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s13">
+        <div class="slide-number-bg">15</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the errors live</span
+              ><span class="tag tag-rose">Attribute sweep</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>What is the model actually predicting?</h2>
+              <div
+                class="rule-short"
+                style="margin: 10px auto; background: var(--rose)"
+              ></div>
+            </div>
+
+            <!-- ── Block 8 interactive dot-strip chart ── -->
+            <div class="e" style="width: 100%; position: relative">
+              <div id="b8chart" style="width: 100%; user-select: none"></div>
+              <!-- tooltip -->
+              <div
+                id="b8tip"
+                style="
+                  position: fixed;
+                  display: none;
+                  pointer-events: none;
+                  background: #0d0d0f;
+                  color: #f5f4f0;
+                  font-family: &quot;Source Sans 3&quot;, sans-serif;
+                  font-size: 11px;
+                  padding: 7px 11px;
+                  border-radius: 4px;
+                  max-width: 220px;
+                  line-height: 1.5;
+                  z-index: 9999;
+                "
+              ></div>
+            </div>
+
+            <div class="e small" style="text-align: center; max-width: 1000px">
+              Vote choice 47%. But <strong>Quebec 91.9%</strong>,
+              <strong>French language 90.8%</strong>,
+              <strong>BQ vote 81.6%</strong>. The model is good at language and
+              region. <em>Vote choice is harder than language.</em>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        /* ── Block 8 two-phase dot-strip chart ─────────────────────────────
+         Phase 1 : all 49 rows visible
+         Phase 2 : middle 39 rows (indices 5-43) fade+collapse; top 5 and
+                   bottom 5 slide to fill, with a "···" ellipsis divider.
+         Navigation intercept: when on this slide and phase=1, the next
+         arrow/space triggers phase 2 instead of leaving the slide.
+      ──────────────────────────────────────────────────────────────────── */
+        (function () {
+          var GROUP_COLOR = {
+            "Vote choice": "#5b21b6",
+            SES: "#166534",
+            Lifestyle: "#b45309",
+          };
+
+          var DATA = [
+            [
+              "Lifestyle",
+              "Primary language is French",
+              0.908,
+              0.89,
+              0.926,
+              0.523,
+            ],
+            ["Lifestyle", "Lives in Quebec", 0.919, 0.901, 0.936, 0.504],
+            [
+              "Vote choice",
+              "Votes for the Bloc Quebecois",
+              0.816,
+              0.793,
+              0.839,
+              0.783,
+            ],
+            [
+              "Lifestyle",
+              "Is an immigrant to Canada",
+              0.739,
+              0.712,
+              0.765,
+              0.844,
+            ],
+            [
+              "Lifestyle",
+              "Uses public or shared transport",
+              0.702,
+              0.676,
+              0.727,
+              0.865,
+            ],
+            ["SES", "Lives in an apartment", 0.675, 0.646, 0.704, 0.669],
+            [
+              "SES",
+              "Is between 18 and 24 years old",
+              0.666,
+              0.635,
+              0.695,
+              0.878,
+            ],
+            [
+              "Lifestyle",
+              "Participates in motorized outdoor activities",
+              0.649,
+              0.619,
+              0.677,
+              0.671,
+            ],
+            ["SES", "Has a high household income", 0.647, 0.617, 0.676, 0.79],
+            [
+              "Lifestyle",
+              "Uses a private vehicle as primary transport",
+              0.644,
+              0.615,
+              0.674,
+              0.738,
+            ],
+            [
+              "Lifestyle",
+              "Has an edgy or unconventional clothing style",
+              0.642,
+              0.612,
+              0.672,
+              0.922,
+            ],
+            ["SES", "Lives in a stand-alone house", 0.64, 0.611, 0.67, 0.504],
+            ["SES", "Is 65 years old or over", 0.637, 0.607, 0.664, 0.833],
+            [
+              "Lifestyle",
+              "Primary language is English",
+              0.63,
+              0.606,
+              0.653,
+              0.517,
+            ],
+            [
+              "Lifestyle",
+              "Prefers beer as favourite alcoholic drink",
+              0.627,
+              0.597,
+              0.657,
+              0.748,
+            ],
+            [
+              "Lifestyle",
+              "Buys coffee at independent cafes",
+              0.625,
+              0.596,
+              0.65,
+              0.841,
+            ],
+            [
+              "Vote choice",
+              "Votes for the New Democratic Party",
+              0.622,
+              0.593,
+              0.65,
+              0.828,
+            ],
+            [
+              "Lifestyle",
+              "Goes to the gym for exercise",
+              0.621,
+              0.592,
+              0.649,
+              0.84,
+            ],
+            ["SES", "Has a university degree", 0.613, 0.587, 0.641, 0.51],
+            ["Lifestyle", "Identifies as a woman", 0.613, 0.586, 0.641, 0.511],
+            ["SES", "Has a low household income", 0.612, 0.585, 0.638, 0.862],
+            ["Lifestyle", "Has tattoos", 0.608, 0.579, 0.636, 0.691],
+            [
+              "Vote choice",
+              "Votes for the Conservative Party of Canada",
+              0.602,
+              0.573,
+              0.631,
+              0.752,
+            ],
+            [
+              "Lifestyle",
+              "Prefers wine as favourite alcoholic drink",
+              0.6,
+              0.578,
+              0.624,
+              0.719,
+            ],
+            [
+              "Lifestyle",
+              "Goes to museums or art galleries",
+              0.596,
+              0.568,
+              0.625,
+              0.796,
+            ],
+            ["Lifestyle", "Goes fishing", 0.595, 0.573, 0.617, 0.672],
+            ["Lifestyle", "Does not exercise", 0.589, 0.563, 0.615, 0.895],
+            ["Lifestyle", "Identifies as white", 0.588, 0.565, 0.613, 0.825],
+            [
+              "Lifestyle",
+              "Shops for clothing at small local stores",
+              0.584,
+              0.555,
+              0.613,
+              0.767,
+            ],
+            ["Lifestyle", "Is a smoker", 0.581, 0.554, 0.605, 0.845],
+            ["Lifestyle", "Lives in the Prairies", 0.577, 0.546, 0.607, 0.885],
+            [
+              "Lifestyle",
+              "Uses active transport (walking or cycling)",
+              0.558,
+              0.528,
+              0.587,
+              0.872,
+            ],
+            ["Lifestyle", "Owns pets", 0.556, 0.532, 0.579, 0.591],
+            [
+              "Lifestyle",
+              "Shops for clothing at large retailers",
+              0.544,
+              0.523,
+              0.564,
+              0.639,
+            ],
+            [
+              "Lifestyle",
+              "Buys coffee at Tim Hortons",
+              0.542,
+              0.511,
+              0.573,
+              0.765,
+            ],
+            ["Lifestyle", "Volunteers regularly", 0.54, 0.526, 0.554, 0.704],
+            [
+              "Lifestyle",
+              "Has a formal or elegant clothing style",
+              0.538,
+              0.506,
+              0.567,
+              0.882,
+            ],
+            [
+              "Lifestyle",
+              "Shops for clothing online",
+              0.533,
+              0.506,
+              0.561,
+              0.91,
+            ],
+            ["Lifestyle", "Does not drink alcohol", 0.528, 0.504, 0.553, 0.766],
+            ["Lifestyle", "Meat consumption", 0.526, 0.515, 0.539, 0.94],
+            [
+              "SES",
+              "Has a middle household income",
+              0.526,
+              0.497,
+              0.556,
+              0.652,
+            ],
+            [
+              "Vote choice",
+              "Votes for the Liberal Party of Canada",
+              0.521,
+              0.491,
+              0.55,
+              0.636,
+            ],
+            [
+              "SES",
+              "Is between 25 and 44 years old",
+              0.519,
+              0.506,
+              0.533,
+              0.594,
+            ],
+            [
+              "SES",
+              "Is between 45 and 64 years old",
+              0.517,
+              0.505,
+              0.529,
+              0.695,
+            ],
+            ["Lifestyle", "Does not buy coffee", 0.516, 0.502, 0.53, 0.626],
+            ["Lifestyle", "Lives in Ontario", 0.502, 0.492, 0.512, 0.748],
+            [
+              "Lifestyle",
+              "Primary exercise is walking",
+              0.499,
+              0.47,
+              0.527,
+              0.556,
+            ],
+            [
+              "Lifestyle",
+              "Has an easygoing or casual clothing style",
+              0.456,
+              0.436,
+              0.475,
+              0.771,
+            ],
+            ["Lifestyle", "Goes hunting", 0.789, 0.761, 0.814, 0.895],
+          ];
+          DATA.sort(function (a, b) {
+            return b[2] - a[2];
+          });
+
+          var N = DATA.length; // 49
+          var TOP = 5,
+            BOT = 5;
+          var MID_START = TOP,
+            MID_END = N - BOT; // indices 5..43 are "middle"
+
+          // ── Layout constants ────────────────────────────────────────────
+          var W = 1100;
+          var LABEL_W = 258;
+          var STRIP_L = LABEL_W + 8;
+          var STRIP_W = W - STRIP_L - 4;
+          var ROW = 12.4;
+          var PAD_TOP = 26,
+            PAD_BOT = 26;
+
+          var xMin = 0.4,
+            xMax = 1.0;
+          function xPx(v) {
+            return STRIP_L + ((v - xMin) / (xMax - xMin)) * STRIP_W;
+          }
+
+          // ── Build SVG with one <g data-row="i"> per row ─────────────────
+          function buildSVG() {
+            var H = PAD_TOP + N * ROW + PAD_BOT;
+            var parts = [];
+            parts.push(
+              '<svg xmlns="http://www.w3.org/2000/svg" id="b8svg"' +
+                ' viewBox="0 0 ' +
+                W +
+                " " +
+                H +
+                '"' +
+                ' style="width:100%;max-width:' +
+                W +
+                "px;display:block;margin:0 auto;" +
+                "font-family:'Source Sans 3',sans-serif;overflow:visible\">",
+            );
+
+            // static grid + axes
+            var ticks = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+            ticks.forEach(function (t) {
+              var x = xPx(t);
+              parts.push(
+                '<line class="b8grid" x1="' +
+                  x +
+                  '" y1="' +
+                  PAD_TOP +
+                  '" x2="' +
+                  x +
+                  '" y2="' +
+                  (H - PAD_BOT) +
+                  '"' +
+                  ' stroke="#d4d2cc" stroke-width="' +
+                  (t === 0.5 ? 1.2 : 0.5) +
+                  '" stroke-dasharray="' +
+                  (t === 0.5 ? "3,3" : "") +
+                  '" />',
+              );
+              parts.push(
+                '<text class="b8grid" x="' +
+                  x +
+                  '" y="' +
+                  (H - PAD_BOT + 10) +
+                  '" text-anchor="middle" font-size="8.5" fill="#6b6b78">' +
+                  Math.round(t * 100) +
+                  "%</text>",
+              );
+            });
+            parts.push(
+              '<text class="b8grid" x="' +
+                (STRIP_L + STRIP_W / 2) +
+                '" y="' +
+                (H - 2) +
+                '" text-anchor="middle" font-size="8" fill="#9b9b9b">Balanced accuracy (95% CI)</text>',
+            );
+            parts.push(
+              '<text class="b8grid" x="' +
+                (xPx(0.5) + 3) +
+                '" y="' +
+                (PAD_TOP - 4) +
+                '" font-size="7.5" fill="#aaaaaa">chance</text>',
+            );
+
+            // legend
+            var GROUPS = ["Vote choice", "SES", "Lifestyle"];
+            var lgx = STRIP_L + 4;
+            GROUPS.forEach(function (g) {
+              var col = GROUP_COLOR[g];
+              parts.push(
+                '<rect class="b8grid" x="' +
+                  lgx +
+                  '" y="3" width="7" height="7" rx="1.5" fill="' +
+                  col +
+                  '" opacity="0.9"/>',
+              );
+              parts.push(
+                '<text class="b8grid" x="' +
+                  (lgx + 10) +
+                  '" y="10" font-size="8" fill="#3a3a42">' +
+                  g +
+                  "</text>",
+              );
+              lgx += g.length * 5.2 + 22;
+            });
+
+            // ellipsis row (hidden in phase 1, shown in phase 2)
+            parts.push(
+              '<g id="b8ellipsis" style="opacity:0;transition:opacity 0.4s 0.5s">',
+            );
+            parts.push(
+              '<text x="' +
+                LABEL_W / 2 +
+                '" y="0" text-anchor="middle" font-size="11" fill="#aaaaaa" font-style="italic">· · · 39 variables near chance · · ·</text>',
+            );
+            parts.push("</g>");
+
+            // one <g> per row - translateY is the only thing that changes
+            DATA.forEach(function (d, i) {
+              var grp = d[0],
+                label = d[1],
+                ba = d[2],
+                lo = d[3],
+                hi = d[4];
+              var cy0 = PAD_TOP + i * ROW + ROW * 0.5; // original y centre
+              var col = GROUP_COLOR[grp] || "#6b6b78";
+              var xBA = xPx(ba),
+                xLo = xPx(lo),
+                xHi = xPx(hi);
+              var fw = i < TOP || i >= MID_END ? "600" : "400";
+              var r = ba >= 0.78 ? 4.5 : 3.5;
+
+              parts.push(
+                '<g data-row="' +
+                  i +
+                  '" data-cy0="' +
+                  cy0 +
+                  '" data-ba="' +
+                  ba +
+                  '" data-xba="' +
+                  xBA +
+                  '"' +
+                  ' style="transition:transform 0.55s cubic-bezier(.4,0,.2,1),' +
+                  'opacity 0.35s ease">',
+              );
+
+              // label
+              parts.push(
+                '<text x="' +
+                  LABEL_W +
+                  '" y="' +
+                  (cy0 + 3.8) +
+                  '" text-anchor="end"' +
+                  ' font-size="8.8" fill="' +
+                  col +
+                  '" font-weight="' +
+                  fw +
+                  '">' +
+                  label +
+                  "</text>",
+              );
+              // CI line
+              parts.push(
+                '<line x1="' +
+                  xLo +
+                  '" y1="' +
+                  cy0 +
+                  '" x2="' +
+                  xHi +
+                  '" y2="' +
+                  cy0 +
+                  '"' +
+                  ' stroke="' +
+                  col +
+                  '" stroke-width="1.6" opacity="0.5"/>',
+              );
+              // cap ticks
+              parts.push(
+                '<line x1="' +
+                  xLo +
+                  '" y1="' +
+                  (cy0 - 2) +
+                  '" x2="' +
+                  xLo +
+                  '" y2="' +
+                  (cy0 + 2) +
+                  '"' +
+                  ' stroke="' +
+                  col +
+                  '" stroke-width="1.2" opacity="0.5"/>',
+              );
+              parts.push(
+                '<line x1="' +
+                  xHi +
+                  '" y1="' +
+                  (cy0 - 2) +
+                  '" x2="' +
+                  xHi +
+                  '" y2="' +
+                  (cy0 + 2) +
+                  '"' +
+                  ' stroke="' +
+                  col +
+                  '" stroke-width="1.2" opacity="0.5"/>',
+              );
+              // dot
+              parts.push(
+                '<circle cx="' +
+                  xBA +
+                  '" cy="' +
+                  cy0 +
+                  '" r="' +
+                  r +
+                  '"' +
+                  ' fill="' +
+                  col +
+                  '" stroke="white" stroke-width="0.8"' +
+                  ' data-i="' +
+                  i +
+                  '" class="b8dot" style="cursor:pointer"/>',
+              );
+
+              parts.push("</g>");
+            });
+
+            parts.push("</svg>");
+            return parts.join("");
+          }
+
+          document.getElementById("b8chart").innerHTML = buildSVG();
+
+          // ── Phase state ─────────────────────────────────────────────────
+          var b8phase = 1; // 1 = full, 2 = top5+bot5
+
+          function enterPhase2() {
+            if (b8phase === 2) return;
+            b8phase = 2;
+
+            var svgEl = document.getElementById("b8svg");
+            var rows = svgEl.querySelectorAll("g[data-row]");
+
+            // ── Step 1: staggered fade of middle rows ──────────────────────
+            rows.forEach(function (g) {
+              var i = parseInt(g.getAttribute("data-row"));
+              if (i >= MID_START && i < MID_END) {
+                var delay = ((i - MID_START) / (MID_END - MID_START)) * 0.18;
+                g.style.transition =
+                  "opacity 0.28s " +
+                  delay.toFixed(3) +
+                  "s ease," +
+                  "transform 0.28s " +
+                  delay.toFixed(3) +
+                  "s ease";
+                g.style.opacity = "0";
+                g.style.transform = "translateX(-18px)";
+              }
+            });
+
+            // ── Step 2: accordion-close survivors + show ellipsis ──────────
+            setTimeout(function () {
+              var SURVIVE = TOP + 1 + BOT;
+              var newH = PAD_TOP + SURVIVE * ROW + PAD_BOT;
+
+              var vb = svgEl.getAttribute("viewBox").split(" ");
+              vb[3] = newH;
+              svgEl.setAttribute("viewBox", vb.join(" "));
+
+              rows.forEach(function (g) {
+                var i = parseInt(g.getAttribute("data-row"));
+                var cy0 = parseFloat(g.getAttribute("data-cy0"));
+                var slot;
+                if (i < MID_START) {
+                  slot = i;
+                } else if (i >= MID_END) {
+                  slot = TOP + 1 + (i - MID_END);
+                } else {
+                  return;
+                }
+                var newCy = PAD_TOP + slot * ROW + ROW * 0.5;
+                var dy = newCy - cy0;
+                g.style.transition =
+                  "transform 0.55s cubic-bezier(.4,0,.2,1), opacity 0.2s ease";
+                g.style.transform = "translateY(" + dy + "px)";
+                g.style.opacity = "1";
+              });
+
+              var ellG = document.getElementById("b8ellipsis");
+              var ellCy = PAD_TOP + TOP * ROW + ROW * 0.5;
+              ellG.querySelector("text").setAttribute("y", ellCy + 3.5);
+              ellG.style.opacity = "1";
+
+              svgEl.querySelectorAll(".b8grid").forEach(function (el) {
+                if (
+                  el.tagName === "line" &&
+                  el.getAttribute("x1") === el.getAttribute("x2")
+                ) {
+                  el.setAttribute("y2", newH - PAD_BOT);
+                }
+                if (
+                  el.tagName === "text" &&
+                  parseFloat(el.getAttribute("y")) > newH - PAD_BOT
+                ) {
+                  el.setAttribute("y", newH - PAD_BOT + 10);
+                }
+              });
+            }, 350);
+
+            // ── Step 3: after accordion settles, swap to full-screen SVG ───
+            // Wait for: 350ms (fade) + 550ms (slide) + 100ms buffer = ~1000ms
+            setTimeout(function () {
+              var chart = document.getElementById("b8chart");
+
+              // Hide caption so it doesn't eat space during phase 2.
+              var slideEl = document.getElementById("s13");
+              var caption = slideEl ? slideEl.querySelector(".e.small") : null;
+              if (caption) {
+                caption.style.visibility = "hidden";
+                caption.style.height = "0";
+                caption.style.overflow = "hidden";
+                caption.style.margin = "0";
+                caption.style.padding = "0";
+              }
+
+              // Measure exactly how much vertical space is left below the chart's
+              // current top edge, accounting for all zooms and layout.
+              // getBoundingClientRect gives device-pixel-accurate position.
+              var rect = chart.getBoundingClientRect();
+              var bottom = window.innerHeight - 20; // 20px bottom breathing room
+              var availH = Math.round(bottom - rect.top);
+              availH = Math.max(availH, 320);
+
+              // Compute row height for 11 slots (top5 + ellipsis + bot5)
+              var SLOTS = TOP + 1 + BOT;
+              var rowH2 = (availH - PAD_TOP - PAD_BOT) / SLOTS;
+              rowH2 = Math.max(rowH2, 20);
+
+              var bigSVG = buildBigSVG(rowH2, availH);
+
+              // Fade old SVG out, swap, fade new one in
+              var oldSvg = document.getElementById("b8svg");
+              oldSvg.style.transition = "opacity 0.3s ease";
+              oldSvg.style.opacity = "0";
+
+              setTimeout(function () {
+                chart.innerHTML = bigSVG;
+                var newSvg = document.getElementById("b8svg");
+                newSvg.style.opacity = "0";
+                newSvg.style.transition = "none";
+                // Force reflow
+                void newSvg.offsetWidth;
+                newSvg.style.transition = "opacity 0.45s ease";
+                newSvg.style.opacity = "1";
+                setupTooltip();
+              }, 320);
+            }, 1000);
+          }
+
+          // ── Build the big phase-2 SVG (top5 + ellipsis + bot5 only) ──────
+          function buildBigSVG(rowH2, totalH) {
+            // Use container's actual pixel width for maximum fill
+            var chartEl = document.getElementById("b8chart");
+            var BW = chartEl ? Math.round(chartEl.offsetWidth / 0.8) : W;
+            BW = Math.max(BW, W); // at least the phase-1 width
+            var BLW = Math.round(BW * 0.28); // label col ≈ 28% of width
+            var BSL = BLW + 10;
+            var BSW = BW - BSL - 8;
+            function bxPx(v) {
+              return BSL + ((v - xMin) / (xMax - xMin)) * BSW;
+            }
+
+            // survivors: indices 0..4 and 44..48
+            var survivors = [];
+            DATA.forEach(function (d, i) {
+              if (i < MID_START || i >= MID_END)
+                survivors.push({ d: d, origIdx: i });
+            });
+
+            var SLOTS = TOP + 1 + BOT;
+
+            // font sizes scale with row height
+            var fs = Math.min(Math.round(rowH2 * 0.52), 22); // label
+            var fsBA = Math.max(Math.round(fs * 0.88), 10); // BA% badge
+            var fsTick = Math.max(Math.round(fs * 0.72), 9); // axis ticks
+            var dotR = Math.min(Math.round(rowH2 * 0.28), 10);
+            var ciW = Math.min(rowH2 * 0.18, 3.5);
+            var capH = Math.min(rowH2 * 0.28, 6);
+
+            var parts = [];
+            parts.push(
+              '<svg xmlns="http://www.w3.org/2000/svg" id="b8svg"' +
+                ' viewBox="0 0 ' +
+                BW +
+                " " +
+                totalH +
+                '"' +
+                ' style="width:100%;display:block;margin:0 auto;' +
+                "font-family:'Source Sans 3',sans-serif;overflow:visible\">",
+            );
+
+            // grid lines
+            var ticks = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+            ticks.forEach(function (t) {
+              var x = bxPx(t);
+              parts.push(
+                '<line x1="' +
+                  x +
+                  '" y1="' +
+                  PAD_TOP +
+                  '" x2="' +
+                  x +
+                  '" y2="' +
+                  (totalH - PAD_BOT) +
+                  '"' +
+                  ' stroke="#d4d2cc" stroke-width="' +
+                  (t === 0.5 ? 2 : 0.8) +
+                  '"' +
+                  ' stroke-dasharray="' +
+                  (t === 0.5 ? "5,4" : "") +
+                  '" />',
+              );
+              parts.push(
+                '<text x="' +
+                  x +
+                  '" y="' +
+                  (totalH - PAD_BOT + fsTick + 2) +
+                  '" text-anchor="middle"' +
+                  ' font-size="' +
+                  fsTick +
+                  '" fill="#6b6b78">' +
+                  Math.round(t * 100) +
+                  "%</text>",
+              );
+            });
+            parts.push(
+              '<text x="' +
+                (BSL + BSW / 2) +
+                '" y="' +
+                (totalH - 4) +
+                '"' +
+                ' text-anchor="middle" font-size="' +
+                (fsTick - 1) +
+                '" fill="#9b9b9b">Balanced accuracy (95% CI)</text>',
+            );
+            parts.push(
+              '<text x="' +
+                (bxPx(0.5) + 5) +
+                '" y="' +
+                (PAD_TOP - 6) +
+                '"' +
+                ' font-size="' +
+                fsTick +
+                '" fill="#cccccc">chance</text>',
+            );
+
+            // legend
+            var GROUPS = ["Vote choice", "SES", "Lifestyle"];
+            var lgx = BSL + 8;
+            var lgsz = Math.max(fsTick + 1, 11);
+            GROUPS.forEach(function (g) {
+              var col = GROUP_COLOR[g];
+              parts.push(
+                '<rect x="' +
+                  lgx +
+                  '" y="5" width="' +
+                  lgsz +
+                  '" height="' +
+                  lgsz +
+                  '" rx="2" fill="' +
+                  col +
+                  '" opacity="0.9"/>',
+              );
+              parts.push(
+                '<text x="' +
+                  (lgx + lgsz + 5) +
+                  '" y="' +
+                  (lgsz + 3) +
+                  '" font-size="' +
+                  lgsz +
+                  '" fill="#3a3a42">' +
+                  g +
+                  "</text>",
+              );
+              lgx += g.length * (lgsz * 0.58) + lgsz + 20;
+            });
+
+            function drawRow(s, slot) {
+              var d = s.d,
+                i = s.origIdx;
+              var grp = d[0],
+                label = d[1],
+                ba = d[2],
+                lo = d[3],
+                hi = d[4];
+              var cy = PAD_TOP + slot * rowH2 + rowH2 * 0.5;
+              var col = GROUP_COLOR[grp] || "#6b6b78";
+              var xBA = bxPx(ba),
+                xLo = bxPx(lo),
+                xHi = bxPx(hi);
+              var yText = cy + fs * 0.36;
+
+              parts.push(
+                '<text x="' +
+                  BLW +
+                  '" y="' +
+                  yText +
+                  '" text-anchor="end"' +
+                  ' font-size="' +
+                  fs +
+                  '" fill="' +
+                  col +
+                  '" font-weight="700">' +
+                  label +
+                  "</text>",
+              );
+              parts.push(
+                '<line x1="' +
+                  xLo +
+                  '" y1="' +
+                  cy +
+                  '" x2="' +
+                  xHi +
+                  '" y2="' +
+                  cy +
+                  '"' +
+                  ' stroke="' +
+                  col +
+                  '" stroke-width="' +
+                  ciW +
+                  '" opacity="0.55"/>',
+              );
+              parts.push(
+                '<line x1="' +
+                  xLo +
+                  '" y1="' +
+                  (cy - capH) +
+                  '" x2="' +
+                  xLo +
+                  '" y2="' +
+                  (cy + capH) +
+                  '"' +
+                  ' stroke="' +
+                  col +
+                  '" stroke-width="' +
+                  ciW * 0.75 +
+                  '" opacity="0.55"/>',
+              );
+              parts.push(
+                '<line x1="' +
+                  xHi +
+                  '" y1="' +
+                  (cy - capH) +
+                  '" x2="' +
+                  xHi +
+                  '" y2="' +
+                  (cy + capH) +
+                  '"' +
+                  ' stroke="' +
+                  col +
+                  '" stroke-width="' +
+                  ciW * 0.75 +
+                  '" opacity="0.55"/>',
+              );
+              parts.push(
+                '<circle cx="' +
+                  xBA +
+                  '" cy="' +
+                  cy +
+                  '" r="' +
+                  dotR +
+                  '"' +
+                  ' fill="' +
+                  col +
+                  '" stroke="white" stroke-width="1.5"' +
+                  ' data-i="' +
+                  i +
+                  '" class="b8dot" style="cursor:pointer"/>',
+              );
+              parts.push(
+                '<text x="' +
+                  (xHi + dotR + 5) +
+                  '" y="' +
+                  yText +
+                  '" font-size="' +
+                  fsBA +
+                  '"' +
+                  ' fill="' +
+                  col +
+                  '" font-weight="600">' +
+                  Math.round(ba * 1000) / 10 +
+                  "%</text>",
+              );
+            }
+
+            // top 5
+            for (var si = 0; si < TOP; si++) drawRow(survivors[si], si);
+
+            // ellipsis row
+            var ellCy = PAD_TOP + TOP * rowH2 + rowH2 * 0.5;
+            parts.push(
+              '<line x1="0" y1="' +
+                (ellCy - rowH2 * 0.38) +
+                '" x2="' +
+                BW +
+                '" y2="' +
+                (ellCy - rowH2 * 0.38) +
+                '"' +
+                ' stroke="#e8e6e0" stroke-width="1" stroke-dasharray="5,5"/>',
+            );
+            parts.push(
+              '<text x="' +
+                BLW / 2 +
+                '" y="' +
+                (ellCy + fs * 0.36) +
+                '" text-anchor="middle"' +
+                ' font-size="' +
+                Math.round(fs * 0.85) +
+                '" fill="#c0bebb" font-style="italic">' +
+                "· · · 39 variables near chance · · ·</text>",
+            );
+            parts.push(
+              '<line x1="0" y1="' +
+                (ellCy + rowH2 * 0.38) +
+                '" x2="' +
+                BW +
+                '" y2="' +
+                (ellCy + rowH2 * 0.38) +
+                '"' +
+                ' stroke="#e8e6e0" stroke-width="1" stroke-dasharray="5,5"/>',
+            );
+
+            // bottom 5
+            for (var bi = 0; bi < BOT; bi++)
+              drawRow(survivors[TOP + bi], TOP + 1 + bi);
+
+            parts.push("</svg>");
+            return parts.join("");
+          }
+
+          function resetPhase1() {
+            if (b8phase === 1) return;
+            b8phase = 1;
+            // Restore caption visibility
+            var slideEl = document.getElementById("s13");
+            var caption = slideEl ? slideEl.querySelector(".e.small") : null;
+            if (caption) {
+              caption.style.visibility = "";
+              caption.style.height = "";
+              caption.style.overflow = "";
+              caption.style.margin = "";
+              caption.style.padding = "";
+            }
+            // rebuild from scratch - clean slate
+            document.getElementById("b8chart").innerHTML = buildSVG();
+            setupTooltip();
+          }
+
+          // ── Tooltip ─────────────────────────────────────────────────────
+          function setupTooltip() {
+            var tip = document.getElementById("b8tip");
+            var svgEl = document.getElementById("b8svg");
+            svgEl.addEventListener("mousemove", function (e) {
+              var dot = e.target.closest(".b8dot");
+              if (!dot) {
+                tip.style.display = "none";
+                return;
+              }
+              var i = parseInt(dot.getAttribute("data-i"));
+              var d = DATA[i];
+              var grp = d[0],
+                label = d[1],
+                ba = d[2],
+                lo = d[3],
+                hi = d[4],
+                base = d[5];
+              var col = GROUP_COLOR[grp] || "#6b6b78";
+              tip.innerHTML =
+                '<strong style="color:' +
+                col +
+                '">' +
+                label +
+                "</strong><br>" +
+                "BA&nbsp;<strong>" +
+                Math.round(ba * 1000) / 10 +
+                "%</strong>" +
+                " [" +
+                Math.round(lo * 1000) / 10 +
+                ", " +
+                Math.round(hi * 1000) / 10 +
+                "]<br>" +
+                "Majority baseline " +
+                Math.round(base * 1000) / 10 +
+                "%<br>" +
+                '<span style="color:#aaa">' +
+                grp +
+                "</span>";
+              tip.style.display = "block";
+              tip.style.left = e.clientX + 14 + "px";
+              tip.style.top = e.clientY - 10 + "px";
+            });
+            svgEl.addEventListener("mouseleave", function () {
+              tip.style.display = "none";
+            });
+          }
+          setupTooltip();
+
+          // ── Navigation intercept ─────────────────────────────────────────
+          // We use a capturing keydown listener (fires before the main one)
+          // to intercept forward navigation while on s13 in phase 1.
+          // btn-next click is intercepted the same way.
+          // Going back to s13 (via any path) resets to phase 1.
+
+          function getCur() {
+            var dots = document.querySelectorAll(".dot");
+            for (var i = 0; i < dots.length; i++) {
+              if (dots[i].classList.contains("on")) return i;
+            }
+            return -1;
+          }
+
+          function getS13idx() {
+            var slides = document.querySelectorAll(".slide");
+            for (var i = 0; i < slides.length; i++) {
+              if (slides[i].id === "s13") return i;
+            }
+            return -1;
+          }
+
+          // capturing keydown - fires before the main listener
+          document.addEventListener(
+            "keydown",
+            function (e) {
+              if (
+                e.key !== "ArrowRight" &&
+                e.key !== "ArrowDown" &&
+                e.key !== " "
+              )
+                return;
+              var s13idx = getS13idx();
+              if (s13idx < 0) return;
+              if (getCur() === s13idx && b8phase === 1) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                enterPhase2();
+              }
+            },
+            true,
+          ); // <-- capturing = true, fires first
+
+          // btn-next click intercept (also capturing)
+          document.addEventListener(
+            "click",
+            function (e) {
+              if (!e.target || e.target.id !== "btn-next") return;
+              var s13idx = getS13idx();
+              if (s13idx < 0) return;
+              if (getCur() === s13idx && b8phase === 1) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                enterPhase2();
+              }
+            },
+            true,
+          );
+
+          // swipe-left intercept on touch
+          var _b8tx = 0;
+          document.addEventListener(
+            "touchstart",
+            function (e) {
+              _b8tx = e.touches[0].clientX;
+            },
+            true,
+          );
+          document.addEventListener(
+            "touchend",
+            function (e) {
+              var dx = e.changedTouches[0].clientX - _b8tx;
+              if (dx < -50) {
+                var s13idx = getS13idx();
+                if (s13idx >= 0 && getCur() === s13idx && b8phase === 1) {
+                  e.stopImmediatePropagation();
+                  enterPhase2();
+                }
+              }
+            },
+            true,
+          );
+
+          // Reset to phase 1 when navigating back to s13.
+          // We watch for the slide gaining the 'active' class via MutationObserver.
+          setTimeout(function () {
+            var s13el = document.getElementById("s13");
+            if (!s13el) return;
+            var obs = new MutationObserver(function (mutations) {
+              mutations.forEach(function (m) {
+                if (m.type === "attributes" && m.attributeName === "class") {
+                  if (s13el.classList.contains("active") && b8phase === 2) {
+                    resetPhase1();
+                  }
+                }
+              });
+            });
+            obs.observe(s13el, { attributes: true });
+          }, 200);
+        })();
+      </script>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 16 - BLOCK 8: RELATED-CUE EXCLUSION
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s13rce">
+        <div class="slide-number-bg">16</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the errors live</span
+              ><span class="tag tag-rose">Proxy cues</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>Hide the proxy: the signal collapses</h2>
+              <div
+                class="rule-short"
+                style="margin: 10px auto; background: var(--rose)"
+              ></div>
+            </div>
+            <div class="e" style="width: 100%; position: relative">
+              <div id="rce-chart" style="width: 100%; user-select: none"></div>
+              <div
+                id="rce-tip"
+                style="
+                  position: fixed;
+                  display: none;
+                  pointer-events: none;
+                  background: #0d0d0f;
+                  color: #f5f4f0;
+                  font-family: &quot;Source Sans 3&quot;, sans-serif;
+                  font-size: 11px;
+                  padding: 7px 11px;
+                  border-radius: 4px;
+                  max-width: 220px;
+                  line-height: 1.5;
+                  z-index: 9999;
+                "
+              ></div>
+            </div>
+            <div class="e small" style="text-align: center; max-width: 1000px">
+              RCE hides the target cue <em>and</em> its nearby proxies;
+              language, region, outdoor bundle.
+              <span style="display: block; margin-top: 4px">
+                GPT-4o's lifestyle edge is almost entirely carried by redundant
+                geo-linguistic signals.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        /* ── Block 8 RCE drop chart ─────────────────────────────────────────
+         One row per target. Each row shows:
+           • Standard dot  (filled, full opacity)
+           • RCE dot       (starts at standard x, slides left on slide entry)
+           • Drop arrow connecting them (fades in after dots settle)
+           • Confidence interval whiskers for both conditions
+         Animation is triggered by MutationObserver on s13rce.active,
+         using the same cubic-bezier as the phase-2 chart next door.
+      ─────────────────────────────────────────────────────────────────── */
+        (function () {
+          // [label, standard_ba, rce_ba, std_lo, std_hi, rce_lo, rce_hi, color, bundle]
+          var RCE_DATA = [
+            [
+              "Lives in Quebec",
+              0.919,
+              0.536,
+              0.901,
+              0.936,
+              0.503,
+              0.569,
+              "#b45309",
+              "Geo-linguistic",
+            ],
+            [
+              "Primary language is French",
+              0.908,
+              0.501,
+              0.89,
+              0.926,
+              0.468,
+              0.534,
+              "#b45309",
+              "Geo-linguistic",
+            ],
+            [
+              "Votes for the Bloc Québécois",
+              0.816,
+              0.5,
+              0.793,
+              0.839,
+              0.469,
+              0.531,
+              "#5b21b6",
+              "Geo-linguistic",
+            ],
+            [
+              "Goes hunting",
+              0.789,
+              0.521,
+              0.761,
+              0.814,
+              0.49,
+              0.553,
+              "#b45309",
+              "Outdoor",
+            ],
+            [
+              "Goes fishing",
+              0.595,
+              0.558,
+              0.573,
+              0.617,
+              0.527,
+              0.589,
+              "#166534",
+              "Outdoor",
+            ],
+          ];
+
+          var BUNDLE_COLOR = {
+            "Geo-linguistic": "#9f1239",
+            Outdoor: "#92400e",
+          };
+          var N = RCE_DATA.length;
+          var xMin = 0.4,
+            xMax = 1.0;
+
+          function buildRCESVG() {
+            // ── Measure available space at render time ─────────────────────
+            // fig-slide has zoom:0.8 on .slide-content; we account for that.
+            var chartEl = document.getElementById("rce-chart");
+            // pixel width of the container (already in zoomed space)
+            var cssW = chartEl ? chartEl.offsetWidth : 900;
+            // Convert to SVG user units that will fill at 100% width.
+            // Since zoom:0.8 shrinks the container, unzoom to get true viewport px,
+            // then use that as viewBox width so the SVG fills edge-to-edge.
+            var W = Math.round(cssW / 0.8);
+            W = Math.max(W, 900);
+
+            // Available height: from just below the header elements to near the bottom
+            // of the slide, leaving room for the caption (~60px) and nav bar (~50px).
+            var availH = Math.round((window.innerHeight - 60 - 50) / 0.8);
+            availH = Math.max(availH, 320);
+
+            var PAD_TOP = 28,
+              PAD_BOT = 30;
+            var ROW = Math.floor((availH - PAD_TOP - PAD_BOT) / N);
+            ROW = Math.max(ROW, 60);
+            var H = PAD_TOP + N * ROW + PAD_BOT;
+
+            // Scale all font / dot sizes with row height
+            var fs = Math.min(Math.round(ROW * 0.3), 22); // label font
+            var fsBadge = Math.max(Math.round(fs * 0.6), 9);
+            var fsTick = Math.max(Math.round(fs * 0.62), 9);
+            var fsBA = Math.max(Math.round(fs * 0.72), 10);
+            var dotR = Math.min(Math.round(ROW * 0.18), 11);
+            var ciW = Math.min(ROW * 0.1, 3.5);
+            var capH = Math.min(ROW * 0.14, 6);
+            var badgeH = Math.round(fs * 0.85);
+            var badgeW = Math.round(badgeH * 5.2);
+
+            var LABEL_W = Math.round(W * 0.3);
+            var STRIP_L = LABEL_W + 10;
+            var STRIP_W = W - STRIP_L - 20;
+            function xPx(v) {
+              return STRIP_L + ((v - xMin) / (xMax - xMin)) * STRIP_W;
+            }
+
+            var parts = [];
+            parts.push(
+              '<svg xmlns="http://www.w3.org/2000/svg" id="rce-svg"' +
+                ' viewBox="0 0 ' +
+                W +
+                " " +
+                H +
+                '"' +
+                ' style="width:100%;display:block;margin:0 auto;' +
+                "font-family:'Source Sans 3',sans-serif;overflow:visible\">",
+            );
+
+            // ── grid lines & axis ──────────────────────────────────────────
+            var ticks = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+            ticks.forEach(function (t) {
+              var x = xPx(t);
+              parts.push(
+                '<line x1="' +
+                  x +
+                  '" y1="' +
+                  PAD_TOP +
+                  '" x2="' +
+                  x +
+                  '" y2="' +
+                  (H - PAD_BOT) +
+                  '"' +
+                  ' stroke="#d4d2cc" stroke-width="' +
+                  (t === 0.5 ? 1.6 : 0.7) +
+                  '"' +
+                  ' stroke-dasharray="' +
+                  (t === 0.5 ? "5,4" : "") +
+                  '" />',
+              );
+              parts.push(
+                '<text x="' +
+                  x +
+                  '" y="' +
+                  (H - PAD_BOT + fsTick + 2) +
+                  '" text-anchor="middle"' +
+                  ' font-size="' +
+                  fsTick +
+                  '" fill="#6b6b78">' +
+                  Math.round(t * 100) +
+                  "%</text>",
+              );
+            });
+            parts.push(
+              '<text x="' +
+                (STRIP_L + STRIP_W / 2) +
+                '" y="' +
+                (H - 4) +
+                '"' +
+                ' text-anchor="middle" font-size="' +
+                (fsTick - 1) +
+                '" fill="#9b9b9b">Balanced accuracy (95% CI)</text>',
+            );
+            parts.push(
+              '<text x="' +
+                (xPx(0.5) + 5) +
+                '" y="' +
+                (PAD_TOP - 6) +
+                '"' +
+                ' font-size="' +
+                fsTick +
+                '" fill="#cccccc">chance</text>',
+            );
+
+            // ── legend ─────────────────────────────────────────────────────
+            var lgSz = Math.max(fsTick + 2, 12);
+            var lgx = STRIP_L + 10;
+            [
+              ["Standard (target cue hidden)", "#3a3a42"],
+              ["RCE (target + proxy cues hidden)", "#9f1239"],
+            ].forEach(function (pair) {
+              parts.push(
+                '<circle cx="' +
+                  (lgx + lgSz * 0.5) +
+                  '" cy="' +
+                  lgSz * 0.6 +
+                  '" r="' +
+                  lgSz * 0.45 +
+                  '"' +
+                  ' fill="' +
+                  pair[1] +
+                  '" opacity="0.85"/>',
+              );
+              parts.push(
+                '<text x="' +
+                  (lgx + lgSz + 4) +
+                  '" y="' +
+                  lgSz +
+                  '"' +
+                  ' font-size="' +
+                  lgSz +
+                  '" fill="#3a3a42">' +
+                  pair[0] +
+                  "</text>",
+              );
+              lgx += pair[0].length * (lgSz * 0.56) + lgSz + 20;
+            });
+
+            // ── rows ───────────────────────────────────────────────────────
+            RCE_DATA.forEach(function (d, i) {
+              var label = d[0],
+                std = d[1],
+                rce = d[2],
+                slo = d[3],
+                shi = d[4],
+                rlo = d[5],
+                rhi = d[6],
+                col = d[7],
+                bundle = d[8];
+
+              var cy = PAD_TOP + i * ROW + ROW * 0.5;
+              var xStd = xPx(std),
+                xRce = xPx(rce);
+              var xSlo = xPx(slo),
+                xShi = xPx(shi);
+              var xRlo = xPx(rlo),
+                xRhi = xPx(rhi);
+              var bCol = BUNDLE_COLOR[bundle] || col;
+              var dropPct = Math.round((std - rce) * 1000) / 10;
+              var yText = cy + fs * 0.36;
+
+              // bundle badge
+              parts.push(
+                '<rect x="' +
+                  (LABEL_W - badgeW - 4) +
+                  '" y="' +
+                  (cy - badgeH * 0.6) +
+                  '"' +
+                  ' width="' +
+                  badgeW +
+                  '" height="' +
+                  badgeH +
+                  '"' +
+                  ' rx="3" fill="' +
+                  bCol +
+                  '" opacity="0.12"/>',
+              );
+              parts.push(
+                '<text x="' +
+                  (LABEL_W - badgeW / 2 - 4) +
+                  '" y="' +
+                  (cy + badgeH * 0.28) +
+                  '"' +
+                  ' text-anchor="middle" font-size="' +
+                  fsBadge +
+                  '" fill="' +
+                  bCol +
+                  '" font-weight="600"' +
+                  ' letter-spacing="0.06em">' +
+                  bundle.toUpperCase() +
+                  "</text>",
+              );
+
+              // label
+              parts.push(
+                '<text x="' +
+                  (LABEL_W - badgeW - 10) +
+                  '" y="' +
+                  yText +
+                  '"' +
+                  ' text-anchor="end" font-size="' +
+                  fs +
+                  '" fill="' +
+                  col +
+                  '" font-weight="700">' +
+                  label +
+                  "</text>",
+              );
+
+              // standard CI
+              parts.push(
+                '<line x1="' +
+                  xSlo +
+                  '" y1="' +
+                  cy +
+                  '" x2="' +
+                  xShi +
+                  '" y2="' +
+                  cy +
+                  '"' +
+                  ' stroke="#3a3a42" stroke-width="' +
+                  ciW +
+                  '" opacity="0.35"/>',
+              );
+              parts.push(
+                '<line x1="' +
+                  xSlo +
+                  '" y1="' +
+                  (cy - capH) +
+                  '" x2="' +
+                  xSlo +
+                  '" y2="' +
+                  (cy + capH) +
+                  '"' +
+                  ' stroke="#3a3a42" stroke-width="' +
+                  ciW * 0.75 +
+                  '" opacity="0.35"/>',
+              );
+              parts.push(
+                '<line x1="' +
+                  xShi +
+                  '" y1="' +
+                  (cy - capH) +
+                  '" x2="' +
+                  xShi +
+                  '" y2="' +
+                  (cy + capH) +
+                  '"' +
+                  ' stroke="#3a3a42" stroke-width="' +
+                  ciW * 0.75 +
+                  '" opacity="0.35"/>',
+              );
+
+              // standard dot (static)
+              parts.push(
+                '<circle class="rce-std-dot" cx="' +
+                  xStd +
+                  '" cy="' +
+                  cy +
+                  '" r="' +
+                  dotR +
+                  '"' +
+                  ' fill="#3a3a42" stroke="white" stroke-width="1.5"' +
+                  ' data-i="' +
+                  i +
+                  '" style="cursor:pointer"/>',
+              );
+              parts.push(
+                '<text x="' +
+                  (xStd + dotR + 5) +
+                  '" y="' +
+                  (cy - dotR - 3) +
+                  '"' +
+                  ' font-size="' +
+                  fsBA +
+                  '" fill="#3a3a42" font-weight="600">' +
+                  Math.round(std * 1000) / 10 +
+                  "%</text>",
+              );
+
+              // RCE CI (starts hidden, fades in after drop)
+              parts.push(
+                '<g id="rce-ci-' +
+                  i +
+                  '" style="opacity:0;transition:opacity 0.4s 0.9s ease">',
+              );
+              parts.push(
+                '<line x1="' +
+                  xRlo +
+                  '" y1="' +
+                  cy +
+                  '" x2="' +
+                  xRhi +
+                  '" y2="' +
+                  cy +
+                  '"' +
+                  ' stroke="' +
+                  bCol +
+                  '" stroke-width="' +
+                  ciW +
+                  '" opacity="0.4"/>',
+              );
+              parts.push(
+                '<line x1="' +
+                  xRlo +
+                  '" y1="' +
+                  (cy - capH) +
+                  '" x2="' +
+                  xRlo +
+                  '" y2="' +
+                  (cy + capH) +
+                  '"' +
+                  ' stroke="' +
+                  bCol +
+                  '" stroke-width="' +
+                  ciW * 0.75 +
+                  '" opacity="0.4"/>',
+              );
+              parts.push(
+                '<line x1="' +
+                  xRhi +
+                  '" y1="' +
+                  (cy - capH) +
+                  '" x2="' +
+                  xRhi +
+                  '" y2="' +
+                  (cy + capH) +
+                  '"' +
+                  ' stroke="' +
+                  bCol +
+                  '" stroke-width="' +
+                  ciW * 0.75 +
+                  '" opacity="0.4"/>',
+              );
+              parts.push("</g>");
+
+              // drop arrow (starts hidden, fades in after dot settles)
+              parts.push(
+                '<g id="rce-arrow-' +
+                  i +
+                  '" style="opacity:0;transition:opacity 0.45s ' +
+                  (0.7 + i * 0.06).toFixed(2) +
+                  's ease">',
+              );
+              parts.push(
+                '<line x1="' +
+                  (xStd - dotR) +
+                  '" y1="' +
+                  cy +
+                  '" x2="' +
+                  (xRce + dotR + 4) +
+                  '" y2="' +
+                  cy +
+                  '"' +
+                  ' stroke="' +
+                  bCol +
+                  '" stroke-width="' +
+                  Math.max(ciW * 0.9, 1.5) +
+                  '" stroke-dasharray="5,3" opacity="0.55"/>',
+              );
+              parts.push(
+                '<polygon points="' +
+                  (xRce + dotR + 4) +
+                  "," +
+                  cy +
+                  " " +
+                  (xRce + dotR + 4 + dotR * 0.8) +
+                  "," +
+                  (cy - dotR * 0.55) +
+                  " " +
+                  (xRce + dotR + 4 + dotR * 0.8) +
+                  "," +
+                  (cy + dotR * 0.55) +
+                  '"' +
+                  ' fill="' +
+                  bCol +
+                  '" opacity="0.7"/>',
+              );
+              parts.push(
+                '<text x="' +
+                  (xStd + xRce) / 2 +
+                  '" y="' +
+                  (cy - dotR - 5) +
+                  '"' +
+                  ' text-anchor="middle" font-size="' +
+                  Math.round(fs * 0.72) +
+                  '" fill="' +
+                  bCol +
+                  '" font-weight="700">−' +
+                  dropPct +
+                  "%</text>",
+              );
+              parts.push("</g>");
+
+              // RCE dot - starts at xStd, animates to xRce on entry
+              parts.push(
+                '<circle id="rce-dot-' +
+                  i +
+                  '" class="rce-rce-dot"' +
+                  ' cx="' +
+                  xStd +
+                  '" cy="' +
+                  cy +
+                  '" r="' +
+                  dotR +
+                  '"' +
+                  ' fill="' +
+                  bCol +
+                  '" stroke="white" stroke-width="1.5"' +
+                  ' data-i="' +
+                  i +
+                  '" data-xstd="' +
+                  xStd +
+                  '" data-xrce="' +
+                  xRce +
+                  '"' +
+                  ' style="cursor:pointer;transition:cx 0.65s ' +
+                  (0.12 + i * 0.1).toFixed(2) +
+                  's cubic-bezier(.4,0,.2,1)"/>',
+              );
+              // RCE % label (starts at std x, slides with dot)
+              var xPctStart = xStd - dotR - 5;
+              var xPctEnd = xRce - dotR - 5;
+              parts.push(
+                '<text id="rce-pct-' +
+                  i +
+                  '"' +
+                  ' x="' +
+                  xPctStart +
+                  '" y="' +
+                  (cy - dotR - 3) +
+                  '"' +
+                  ' text-anchor="end" font-size="' +
+                  fsBA +
+                  '" fill="' +
+                  bCol +
+                  '" font-weight="600"' +
+                  ' data-xrce="' +
+                  xPctEnd +
+                  '"' +
+                  ' style="transition:x 0.65s ' +
+                  (0.12 + i * 0.1).toFixed(2) +
+                  's cubic-bezier(.4,0,.2,1);opacity:0">' +
+                  Math.round(rce * 1000) / 10 +
+                  "%</text>",
+              );
+            });
+
+            parts.push("</svg>");
+            return parts.join("");
+          }
+
+          document.getElementById("rce-chart").innerHTML = buildRCESVG();
+
+          var rceAnimated = false;
+
+          function animateRCE() {
+            if (rceAnimated) return;
+            rceAnimated = true;
+            var svg = document.getElementById("rce-svg");
+
+            RCE_DATA.forEach(function (d, i) {
+              var dot = document.getElementById("rce-dot-" + i);
+              var pct = document.getElementById("rce-pct-" + i);
+              var arrow = document.getElementById("rce-arrow-" + i);
+              var ci = document.getElementById("rce-ci-" + i);
+              var xRce = parseFloat(dot.getAttribute("data-xrce"));
+              var xRcePct = parseFloat(pct.getAttribute("data-xrce"));
+
+              // Animate dot cx via setAttribute (CSS transition on cx works in modern browsers)
+              dot.setAttribute("cx", xRce);
+              pct.setAttribute("x", xRcePct);
+              pct.style.opacity = "1";
+
+              // Fade in arrow and CI after dot has moved
+              if (arrow) arrow.style.opacity = "1";
+              if (ci) ci.style.opacity = "1";
+            });
+          }
+
+          function resetRCE() {
+            rceAnimated = false;
+            // Re-measure and rebuild so the SVG fills the current viewport
+            // Initial build deferred so layout is settled and offsetWidth is correct
+            setTimeout(function () {
+              document.getElementById("rce-chart").innerHTML = buildRCESVG();
+              setupRCETip();
+            }, 0);
+
+            // Rebuild on resize (e.g. zoom toggle)
+            window.addEventListener("resize", function () {
+              if (rceAnimated) {
+                // rebuild and immediately animate
+                rceAnimated = false;
+                document.getElementById("rce-chart").innerHTML = buildRCESVG();
+                setupRCETip();
+                setTimeout(animateRCE, 60);
+              } else {
+                document.getElementById("rce-chart").innerHTML = buildRCESVG();
+                setupRCETip();
+              }
+            });
+            setupRCETip();
+          }
+
+          // ── Tooltip ─────────────────────────────────────────────────────
+          function setupRCETip() {
+            var tip = document.getElementById("rce-tip");
+            var svg = document.getElementById("rce-svg");
+            if (!svg || !tip) return;
+            svg.addEventListener("mousemove", function (e) {
+              var dot = e.target;
+              if (
+                !dot.classList.contains("rce-std-dot") &&
+                !dot.classList.contains("rce-rce-dot")
+              ) {
+                tip.style.display = "none";
+                return;
+              }
+              var i = parseInt(dot.getAttribute("data-i"));
+              var d = RCE_DATA[i];
+              var isRce = dot.classList.contains("rce-rce-dot");
+              var ba = isRce ? d[2] : d[1];
+              var lo = isRce ? d[5] : d[3];
+              var hi = isRce ? d[6] : d[4];
+              var cond = isRce ? "RCE condition" : "Standard condition";
+              var col = isRce ? BUNDLE_COLOR[d[8]] || d[7] : "#3a3a42";
+              tip.innerHTML =
+                '<strong style="color:' +
+                col +
+                '">' +
+                d[0] +
+                "</strong><br>" +
+                cond +
+                "<br>" +
+                "BA&nbsp;<strong>" +
+                Math.round(ba * 1000) / 10 +
+                "%</strong>" +
+                " [" +
+                Math.round(lo * 1000) / 10 +
+                ", " +
+                Math.round(hi * 1000) / 10 +
+                "]<br>" +
+                '<span style="color:#aaa">' +
+                d[8] +
+                " bundle</span>";
+              tip.style.display = "block";
+              tip.style.left = e.clientX + 14 + "px";
+              tip.style.top = e.clientY - 10 + "px";
+            });
+            svg.addEventListener("mouseleave", function () {
+              tip.style.display = "none";
+            });
+          }
+          setupRCETip();
+
+          // ── Watch for slide becoming active ─────────────────────────────
+          setTimeout(function () {
+            var slideEl = document.getElementById("s13rce");
+            if (!slideEl) return;
+            var obs = new MutationObserver(function (mutations) {
+              mutations.forEach(function (m) {
+                if (m.type === "attributes" && m.attributeName === "class") {
+                  if (slideEl.classList.contains("active")) {
+                    // Rebuild to correct size, then animate
+                    if (!rceAnimated) {
+                      document.getElementById("rce-chart").innerHTML =
+                        buildRCESVG();
+                      setupRCETip();
+                    }
+                    setTimeout(animateRCE, 180);
+                  } else {
+                    // Reset when leaving so re-entry re-animates
+                    setTimeout(resetRCE, 400);
+                  }
+                }
+              });
+            });
+            obs.observe(slideEl, { attributes: true });
+          }, 200);
+        })();
+      </script>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 17 - BLOCK 10: WRONG BY ONE NEIGHBOR
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s14">
+        <div class="slide-number-bg">17</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the errors live</span
+              ><span class="tag tag-sky">CHES distance</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>When wrong, models pull CPC voters to the centre</h2>
+              <div
+                class="rule-short"
+                style="margin: 10px auto; background: var(--sky)"
+              ></div>
+            </div>
+            <div
+              class="e"
+              style="width: 100%; display: flex; justify-content: center"
+            >
+              <div class="fig-frame" style="height: 52vh">
+                <img
+                  src="figures/block10_fig1_stacked_bars.png"
+                  alt="Block 10 - CHES ideological distance of errors"
+                />
+              </div>
+            </div>
+            <div class="e small" style="text-align: center; max-width: 1000px">
+              Arrow runs from true party position to where wrong predictions
+              land on the left-right scale.
+              <strong>CPC errors travel 3+ points leftward</strong>; BQ errors
+              barely move.
+              <span style="display: block; margin-top: 4px">
+                CHES party positions: Dassonneville &amp; Koedam 2024
+                (CHES-Canada 2023).
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 18 - BLOCK 9: SAME ERRORS?
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s15">
+        <div class="slide-number-bg">18</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the errors live</span
+              ><span class="tag tag-violet">Error overlap</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>Multinomial wins everywhere, except BQ</h2>
+              <div class="rule-short" style="margin: 10px auto"></div>
+            </div>
+            <div
+              class="e"
+              style="width: 100%; display: flex; justify-content: center"
+            >
+              <div class="fig-frame" style="height: 52vh">
+                <img
+                  src="figures/block9_fig2_by_party.png"
+                  alt="Block 9 - error overlap by party"
+                />
+              </div>
+            </div>
+            <div class="e small" style="text-align: center; max-width: 1000px">
+              Multinomial outperforms GPT-4o on LPC (+21%), NDP (+13%), and CPC
+              (+8%).
+              <strong
+                >GPT-4o's only edge: BQ voters (+16%), driven by its language
+                detection.</strong
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 19 - BLOCK 11: US DATA
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide fig-slide" id="s16">
+        <div class="slide-number-bg">19</div>
+        <div class="slide-content w100">
+          <div class="slide-inner flex-col gap" style="align-items: center">
+            <div
+              class="e"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <span class="act-label">Where the errors live</span
+              ><span class="tag tag-green">US benchmark</span>
+            </div>
+            <div class="e" style="text-align: center">
+              <h2>US data, same gap.</h2>
+              <div
+                class="rule-short"
+                style="margin: 10px auto; background: var(--green)"
+              ></div>
+            </div>
+            <div
+              class="e"
+              style="width: 100%; display: flex; justify-content: center"
+            >
+              <div class="fig-frame" style="height: 50vh">
+                <img
+                  src="figures/block11_fig1_accuracy.png"
+                  alt="Block 11 - US 3-category benchmark"
+                />
+              </div>
+            </div>
+            <div class="e small" style="text-align: center; max-width: 1000px">
+              3-category US sample, n = 1,000.
+              <strong>gpt-4o 58.0%</strong> [54.8, 61.2].
+              <strong>Multinomial 63.3%</strong> [60.2, 66.3].
+              <strong>−5.3%.</strong> Different country, different party system.
+              <em>Same shape: the gap is method-level, not country-level.</em>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 20 - THREE-LINE CONCLUSION
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s17">
+        <div class="slide-content w100">
+          <div
+            class="slide-inner flex-col gap-lg"
+            style="align-items: center; text-align: center"
+          >
+            <div class="e">
+              <span class="act-label">Conclusion</span>
+            </div>
+            <div class="e">
+              <div class="rule-short" style="margin: 0 auto"></div>
+            </div>
+            <div class="e flex-col gap" style="max-width: 1000px">
+              <div
+                class="big-q"
+                style="font-size: clamp(1.6rem, 3.6vw, 2.8rem)"
+              >
+                The regression wins.
+              </div>
+              <div
+                class="big-q"
+                style="
+                  font-size: clamp(1.6rem, 3.6vw, 2.8rem);
+                  color: var(--violet);
+                "
+              >
+                But the LLM signal is real.
+              </div>
+              <div
+                class="big-q"
+                style="
+                  font-size: clamp(1.6rem, 3.6vw, 2.8rem);
+                  color: var(--sky);
+                "
+              >
+                Opus reaches 48.8% off the shelf<br />
+                from profile data alone.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 21 - THANK YOU
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s18">
+        <div
+          class="slide-inner flex-col gap-lg"
+          style="align-items: flex-start; max-width: 900px"
+        >
+          <div class="e">
+            <div class="label" style="letter-spacing: 0.12em">Thank you</div>
+            <div
+              class="rule-short"
+              style="background: var(--sky); margin-top: 10px"
+            ></div>
+          </div>
+          <div class="e">
+            <h2 style="font-size: clamp(1.6rem, 3vw, 2.4rem)">
+              What is this signal good for?
+            </h2>
+            <p style="max-width: 780px; margin-top: 10px; font-size: 1rem">
+              Not high-stakes individual decisions. But for low-stakes imputation,
+              survey repair, and exploratory segmentation, off-the-shelf LLMs are
+              already informative.
+            </p>
+          </div>
+          <div class="e rule" style="margin: 0"></div>
+          <div class="e" style="display: flex; gap: 16px; flex-wrap: wrap">
+            <div class="author-card">
+              <div class="author-name">Laurence-Olivier M. Foisy</div>
+              <div
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  font-size: 0.7rem;
+                  color: var(--ink3);
+                  margin-top: 2px;
+                "
+              >
+                mail@mfoisy.com
+              </div>
+              <div class="author-aff">Université Laval</div>
+            </div>
+            <div class="author-card">
+              <div class="author-name">Yannick Dufresne</div>
+              <div
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  font-size: 0.7rem;
+                  color: var(--ink3);
+                  margin-top: 2px;
+                "
+              >
+                yannick.dufresne@pol.ulaval.ca
+              </div>
+              <div class="author-aff">Université Laval</div>
+            </div>
+          </div>
+          <div class="e">
+            <div class="cols4" style="gap: 12px">
+              <div
+                class="card pad center flex-col gap-sm"
+                style="align-items: center; border-top: 3px solid var(--sky)"
+              >
+                <div class="stat-num sky" data-count="38.3" data-suffix="%">
+                  38.3%
+                </div>
+                <div class="stat-lbl">Majority baseline</div>
+              </div>
+              <div
+                class="card pad center flex-col gap-sm"
+                style="align-items: center; border-top: 3px solid var(--violet)"
+              >
+                <div class="stat-num violet" data-count="48.8" data-suffix="%">
+                  48.8%
+                </div>
+                <div class="stat-lbl">Best LLM: Opus 4.7</div>
+              </div>
+              <div
+                class="card pad center flex-col gap-sm"
+                style="align-items: center; border-top: 3px solid var(--amber)"
+              >
+                <div
+                  class="stat-num amber"
+                  data-count="55.9"
+                  data-suffix="%"
+                >
+                  55.9%
+                </div>
+                <div class="stat-lbl">Multinomial</div>
+              </div>
+              <div
+                class="card pad center flex-col gap-sm"
+                style="align-items: center; border-top: 3px solid var(--green)"
+              >
+                <div class="stat-num green" data-count="24">
+                  24
+                </div>
+                <div class="stat-lbl">Profile variables</div>
+              </div>
+            </div>
+          </div>
+          <div class="e mono" style="font-size: 0.68rem; color: var(--ink3)">
+            No task-specific fine-tuning · no app priors · no direct vote cues
+          </div>
+        </div>
+      </div>
+      <!-- ═══════════════════════════════════════════════════════════════
+       SLIDE 22 - ASK THE RESEARCH ASSISTANT
+       ══════════════════════════════════════════════════════════════ -->
+      <div class="slide" id="s-chat">
+        <div class="slide-content w100" style="height: 100%">
+          <div class="slide-inner flex-col gap" style="height: 100%; max-width: 860px; margin: 0 auto; padding: 32px 24px">
+            <div class="e">
+              <span class="act-label">Q &amp; A</span>
+              <h2 style="margin-top: 8px; font-size: clamp(1.3rem, 2.6vw, 2rem)">Ask about the research</h2>
+              <p style="font-size: 0.85rem; color: var(--ink3); margin-top: 4px">
+                Guardrailed assistant -- answers are grounded in the study data only.
+              </p>
+            </div>
+
+            <!-- Chat history -->
+            <div id="chat-history" style="
+              flex: 1;
+              overflow-y: auto;
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+              padding: 12px;
+              background: var(--surface, #f8f8f8);
+              border: 1px solid var(--border, #e0e0e0);
+              border-radius: 8px;
+              min-height: 0;
+              max-height: 340px;
+              font-size: 0.88rem;
+              line-height: 1.5;
+            ">
+              <div class="chat-msg assistant" style="
+                align-self: flex-start;
+                background: #fff;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 8px 12px;
+                max-width: 90%;
+                color: var(--ink, #111);
+              ">
+                Hello! I can answer questions about the MapleMeth 2026 study -- accuracy numbers, methodology, which model won, why, and what the signal is useful for. What would you like to know?
+              </div>
+            </div>
+
+            <!-- Input row -->
+            <div class="e" style="display: flex; gap: 8px; align-items: flex-end">
+              <textarea
+                id="chat-input"
+                rows="2"
+                placeholder="Type a question about the research..."
+                style="
+                  flex: 1;
+                  resize: none;
+                  border: 1px solid var(--border, #ccc);
+                  border-radius: 6px;
+                  padding: 8px 10px;
+                  font-family: inherit;
+                  font-size: 0.88rem;
+                  line-height: 1.4;
+                  outline: none;
+                  background: #fff;
+                  color: var(--ink, #111);
+                "
+              ></textarea>
+              <button
+                id="chat-send"
+                style="
+                  padding: 8px 18px;
+                  background: var(--violet, #5b21b6);
+                  color: #fff;
+                  border: none;
+                  border-radius: 6px;
+                  font-family: inherit;
+                  font-size: 0.88rem;
+                  font-weight: 600;
+                  cursor: pointer;
+                  white-space: nowrap;
+                  height: 52px;
+                "
+              >Send</button>
+            </div>
+            <div id="chat-error" style="font-size: 0.78rem; color: #c0392b; min-height: 1em"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <!-- #deck -->
+    <script>
+      // ── Chatbox logic ────────────────────────────────────────────────────────
+      // Replace the placeholder below with your deployed Vercel URL after running
+      // `vercel deploy` (e.g. https://maplemeth-2026.vercel.app/api/chat)
+      const CHAT_API_URL = "https://maplemethdeploy.vercel.app/api/chat";
+
+      const history    = [];
+      const inputEl    = document.getElementById("chat-input");
+      const sendBtn    = document.getElementById("chat-send");
+      const historyEl  = document.getElementById("chat-history");
+      const errorEl    = document.getElementById("chat-error");
+
+      function appendMsg(role, text) {
+        const isUser = role === "user";
+        const div = document.createElement("div");
+        div.className = "chat-msg " + role;
+        div.style.cssText = [
+          "align-self: " + (isUser ? "flex-end" : "flex-start"),
+          "background: " + (isUser ? "var(--violet, #5b21b6)" : "#fff"),
+          "color: " + (isUser ? "#fff" : "var(--ink, #111)"),
+          "border: 1px solid " + (isUser ? "transparent" : "#e0e0e0"),
+          "border-radius: 8px",
+          "padding: 8px 12px",
+          "max-width: 85%",
+          "white-space: pre-wrap",
+          "word-break: break-word",
+        ].join(";");
+        div.textContent = text;
+        historyEl.appendChild(div);
+        historyEl.scrollTop = historyEl.scrollHeight;
+        return div;
+      }
+
+      async function sendMessage() {
+        const text = inputEl.value.trim();
+        if (!text) return;
+        errorEl.textContent = "";
+        inputEl.value = "";
+        sendBtn.disabled = true;
+        sendBtn.textContent = "...";
+
+        appendMsg("user", text);
+        history.push({ role: "user", content: text });
+
+        const thinkingEl = appendMsg("assistant", "Thinking...");
+        thinkingEl.style.opacity = "0.5";
+
+        try {
+          const res = await fetch(CHAT_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: history }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          thinkingEl.remove();
+          appendMsg("assistant", data.reply);
+          history.push({ role: "assistant", content: data.reply });
+        } catch (err) {
+          thinkingEl.remove();
+          errorEl.textContent = "Error: " + err.message;
+          history.pop(); // remove failed user turn
+        } finally {
+          sendBtn.disabled = false;
+          sendBtn.textContent = "Send";
+        }
+      }
+
+      sendBtn.addEventListener("click", sendMessage);
+      inputEl.addEventListener("keydown", (e) => {
+        // Enter sends; Shift+Enter inserts newline; prevent slide navigation
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        if (e.key === "ArrowRight" || e.key === "ArrowLeft" ||
+            e.key === "ArrowUp"   || e.key === "ArrowDown"  || e.key === " ") {
+          e.stopPropagation();
+        }
+      });
+    </script>
+    <script>
+      const slides = Array.from(document.querySelectorAll(".slide"));
+      const total = slides.length;
+      let cur = 0;
+      document.getElementById("slidenum").textContent = "1 / " + total;
+      document.getElementById("topbar").style.width = (1 / total) * 100 + "%";
+      function goTo(n) {
+        if (n < 0 || n >= total) return;
+        const prev = cur;
+        slides[prev].classList.remove("active");
+        slides[prev].classList.add("out");
+        setTimeout(() => slides[prev].classList.remove("out"), 500);
+        cur = n;
+        slides[cur].classList.add("active");
+        document.getElementById("topbar").style.width =
+          ((cur + 1) / total) * 100 + "%";
+        document.getElementById("slidenum").textContent =
+          cur + 1 + " / " + total;
+        document
+          .querySelectorAll(".dot")
+          .forEach((d, i) => d.classList.toggle("on", i === cur));
+        triggerCounters();
+      }
+      const nav = document.getElementById("nav");
+      slides.forEach((_, i) => {
+        const d = document.createElement("div");
+        d.className = "dot" + (i === 0 ? " on" : "");
+        d.addEventListener("click", () => goTo(i));
+        nav.appendChild(d);
+      });
+      document
+        .getElementById("btn-prev")
+        .addEventListener("click", () => goTo(cur - 1));
+      document
+        .getElementById("btn-next")
+        .addEventListener("click", () => goTo(cur + 1));
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === " ") {
+          e.preventDefault();
+          goTo(cur + 1);
+        }
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+          e.preventDefault();
+          goTo(cur - 1);
+        }
+        if (e.key === "z" || e.key === "Z") {
+          e.preventDefault();
+          const levels = [1.0, 1.3, 1.5];
+          const cz = parseFloat(document.documentElement.style.zoom || "1.5");
+          const idx = levels.findIndex((l) => Math.abs(l - cz) < 0.01);
+          const next = levels[(idx + 1) % levels.length];
+          document.documentElement.style.zoom = next;
+        }
+      });
+      let tx = 0;
+      document.addEventListener("touchstart", (e) => {
+        tx = e.touches[0].clientX;
+      });
+      document.addEventListener("touchend", (e) => {
+        const dx = e.changedTouches[0].clientX - tx;
+        if (Math.abs(dx) > 50) {
+          dx < 0 ? goTo(cur + 1) : goTo(cur - 1);
+        }
+      });
+      function triggerCounters() {
+        slides[cur].querySelectorAll("[data-count]").forEach((el) => {
+          const target = parseFloat(el.dataset.count),
+            suffix = el.dataset.suffix || "";
+          const dec = String(target).includes(".")
+            ? String(target).split(".")[1].length
+            : 0;
+          const dur = 1100,
+            t0 = performance.now();
+          function tick(now) {
+            const t = Math.min((now - t0) / dur, 1),
+              e2 = 1 - Math.pow(1 - t, 3);
+            el.textContent = (target * e2).toFixed(dec) + suffix;
+            if (t < 1) requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        });
+      }
+      triggerCounters();
+    </script>
+  </body>
+</html>
