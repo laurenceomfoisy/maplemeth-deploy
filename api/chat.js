@@ -9,8 +9,12 @@
 //   3. System prompt prepended server-side, never overridable by client
 //   4. History capped at 10 turns (prevents context-stuffing)
 //   5. Low temperature (0.2), token cap (600)
+//
+// Logging: every successful turn is appended to the `conversations` table
+// in Vercel Postgres (fire-and-forget, never blocks the response).
 
 import { PROJECT_CONTEXT } from "./context_blob.js";
+import { sql } from "@vercel/postgres";
 
 // ── Allowed origins ───────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = new Set([
@@ -69,8 +73,6 @@ function sanitizeMessage(msg) {
 }
 
 // ── Gemini API call ───────────────────────────────────────────────────────────
-// Gemini uses a different message format: contents[] with parts[{text}]
-// System instruction is passed separately as systemInstruction.
 async function callGemini(apiKey, systemPrompt, messages) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
@@ -101,6 +103,36 @@ async function callGemini(apiKey, systemPrompt, messages) {
 
   const data = await res.json();
   return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+}
+
+// ── DB logging (fire-and-forget) ──────────────────────────────────────────────
+// Creates the table if it doesn't exist yet, then inserts one row per turn.
+// A "session_id" is generated client-side (UUID) so turns from the same
+// conversation can be grouped. If no POSTGRES_URL is set (e.g. local dev
+// without the DB wired up) this silently skips logging.
+async function logTurn(sessionId, origin, userMessage, assistantReply, turnIndex) {
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS conversations (
+        id            SERIAL PRIMARY KEY,
+        session_id    TEXT        NOT NULL,
+        origin        TEXT,
+        turn_index    INTEGER     NOT NULL,
+        user_message  TEXT        NOT NULL,
+        assistant_reply TEXT      NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    await sql`
+      INSERT INTO conversations
+        (session_id, origin, turn_index, user_message, assistant_reply)
+      VALUES
+        (${sessionId}, ${origin}, ${turnIndex}, ${userMessage}, ${assistantReply})
+    `;
+  } catch (err) {
+    // Never let logging failures surface to the user
+    console.error("[log] failed to write turn:", err?.message ?? err);
+  }
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -142,6 +174,12 @@ export default async function handler(req, res) {
 
   try {
     const reply = await callGemini(apiKey, SYSTEM_PROMPT, clean);
+
+    // Fire-and-forget logging — don't await, don't block the response
+    const sessionId  = typeof body.session_id === "string" ? body.session_id.slice(0, 64) : "unknown";
+    const turnIndex  = clean.filter((m) => m.role === "user").length;
+    logTurn(sessionId, origin, lastUser.content, reply, turnIndex);
+
     return res.status(200).json({ reply });
   } catch (err) {
     return res.status(500).json({ error: "Request failed." });
