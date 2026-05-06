@@ -20,6 +20,8 @@ import { neon } from "@neondatabase/serverless";
 const ALLOWED_ORIGINS = new Set([
   "https://laurenceomfoisy.github.io",
   "https://maplemethdeploy.vercel.app",
+  "https://mfoisy.com",
+  "https://www.mfoisy.com",
   "http://localhost",
   "http://127.0.0.1",
   "null", // file:// opened locally
