@@ -9,7 +9,7 @@
 //
 // Set ADMIN_SECRET in Vercel dashboard → Settings → Environment Variables.
 
-import { sql } from "@vercel/postgres";
+import { neon } from "@neondatabase/serverless";
 
 export default async function handler(req, res) {
   // ── Auth ────────────────────────────────────────────────────────────────────
@@ -24,29 +24,26 @@ export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "GET only." });
 
   try {
+    const sql = neon(process.env.DATABASE_URL);
     const { session, csv, limit: limitParam } = req.query;
     const limit = Math.min(parseInt(limitParam ?? "500", 10) || 500, 2000);
 
     let rows;
 
     if (session) {
-      // Single session — all turns in order
-      const result = await sql`
+      rows = await sql`
         SELECT id, session_id, origin, turn_index, user_message, assistant_reply, created_at
         FROM conversations
         WHERE session_id = ${session}
         ORDER BY turn_index ASC
       `;
-      rows = result.rows;
     } else {
-      // Latest N turns across all sessions
-      const result = await sql`
+      rows = await sql`
         SELECT id, session_id, origin, turn_index, user_message, assistant_reply, created_at
         FROM conversations
         ORDER BY created_at DESC
         LIMIT ${limit}
       `;
-      rows = result.rows;
     }
 
     // ── CSV export ─────────────────────────────────────────────────────────────

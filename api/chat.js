@@ -14,7 +14,7 @@
 // in Vercel Postgres (fire-and-forget, never blocks the response).
 
 import { PROJECT_CONTEXT } from "./context_blob.js";
-import { sql } from "@vercel/postgres";
+import { neon } from "@neondatabase/serverless";
 
 // ── Allowed origins ───────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = new Set([
@@ -112,6 +112,7 @@ async function callGemini(apiKey, systemPrompt, messages) {
 // without the DB wired up) this silently skips logging.
 async function logTurn(sessionId, origin, userMessage, assistantReply, turnIndex) {
   try {
+    const sql = neon(process.env.DATABASE_URL);
     await sql`
       CREATE TABLE IF NOT EXISTS conversations (
         id            SERIAL PRIMARY KEY,
@@ -128,9 +129,7 @@ async function logTurn(sessionId, origin, userMessage, assistantReply, turnIndex
         (session_id, origin, turn_index, user_message, assistant_reply)
       VALUES
         (${sessionId}, ${origin}, ${turnIndex}, ${userMessage}, ${assistantReply})
-    `;
-  } catch (err) {
-    // Never let logging failures surface to the user
+    `;  } catch (err) {
     console.error("[log] failed to write turn:", err?.message ?? err);
   }
 }
